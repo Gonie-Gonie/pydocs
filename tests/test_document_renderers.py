@@ -11,13 +11,16 @@ from docscriptor import (
     Document,
     Emphasis,
     Figure,
+    ListBlock,
     Paragraph,
     ParagraphStyle,
     Section,
     Strong,
     Subsection,
     Table,
+    bullet_list,
     markup,
+    numbered_list,
     styled,
 )
 
@@ -50,6 +53,17 @@ def test_markup_creates_styled_fragments() -> None:
     assert fragments[5].style.font_name == "Courier"
 
 
+def test_list_helpers_create_block_instances() -> None:
+    bullet = bullet_list("first", Paragraph("second"))
+    ordered = numbered_list("step one", "step two")
+
+    assert isinstance(bullet, ListBlock)
+    assert bullet.ordered is False
+    assert [item.plain_text() for item in bullet.items] == ["first", "second"]
+    assert ordered.ordered is True
+    assert [item.plain_text() for item in ordered.items] == ["step one", "step two"]
+
+
 def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     image_path = tmp_path / "sample.png"
     _write_sample_image(image_path)
@@ -73,6 +87,11 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
             Paragraph(markup("Inline helpers also support **bold** and *italic* markup.")),
             Subsection(
                 "Artifacts",
+                bullet_list(
+                    "Lists render into both DOCX and PDF.",
+                    Paragraph("Paragraph instances can also be list items."),
+                ),
+                numbered_list("Create the model", "Render the files"),
                 Table(
                     headers=["Type", "Status"],
                     rows=[
@@ -106,6 +125,8 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert "Summary" in paragraph_texts
     assert any("docscriptor" in text for text in paragraph_texts)
     assert any("Figure 1. Tiny sample image." in text for text in paragraph_texts)
+    assert any(paragraph.style.name == "List Bullet" for paragraph in word_document.paragraphs)
+    assert any(paragraph.style.name == "List Number" for paragraph in word_document.paragraphs)
 
     assert len(word_document.tables) == 1
     assert word_document.tables[0].cell(1, 0).text == "DOCX"
@@ -116,3 +137,4 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert "Summary" in pdf_text
     assert "Table 1. Generated artifacts." in pdf_text
     assert "Figure 1. Tiny sample image." in pdf_text
+    assert "Lists render into both DOCX and PDF." in pdf_text

@@ -166,6 +166,29 @@ class Paragraph(Block):
         return "".join(fragment.plain_text() for fragment in self.content)
 
 
+ListInput = Paragraph | InlineInput
+
+
+def coerce_list_item(value: ListInput) -> Paragraph:
+    """Normalize a list item into a Paragraph instance."""
+
+    if isinstance(value, Paragraph):
+        return value
+    return Paragraph(value)
+
+
+@dataclass(slots=True, init=False)
+class ListBlock(Block):
+    """An ordered or unordered list of paragraphs."""
+
+    items: list[Paragraph]
+    ordered: bool
+
+    def __init__(self, *items: ListInput, ordered: bool = False) -> None:
+        self.items = [coerce_list_item(item) for item in items if item is not None]
+        self.ordered = ordered
+
+
 BlockInput = Block | str | Sequence["BlockInput"] | None
 
 
@@ -321,6 +344,18 @@ def body(*children: BlockInput) -> Body:
 
 def paragraph(*content: InlineInput, style: ParagraphStyle | None = None) -> Paragraph:
     return Paragraph(*content, style=style)
+
+
+def bullet_list(*items: ListInput) -> ListBlock:
+    """Create a bullet list from paragraph or inline values."""
+
+    return ListBlock(*items, ordered=False)
+
+
+def numbered_list(*items: ListInput) -> ListBlock:
+    """Create a numbered list from paragraph or inline values."""
+
+    return ListBlock(*items, ordered=True)
 
 
 def section(title: InlineInput, *children: BlockInput, level: int = 1) -> Section:

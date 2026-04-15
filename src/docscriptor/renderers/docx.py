@@ -8,7 +8,7 @@ from docx import Document as WordDocument
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt, RGBColor
 
-from docscriptor.model import Body, Document, Figure, Paragraph, ParagraphStyle, PathLike, Section, Table, Text, Theme
+from docscriptor.model import Body, Document, Figure, ListBlock, Paragraph, ParagraphStyle, PathLike, Section, Table, Text, Theme
 
 
 ALIGNMENTS = {
@@ -63,6 +63,9 @@ class DocxRenderer:
             self._apply_paragraph_style(paragraph, block.style)
             self._append_runs(paragraph, block.content)
             return
+        if isinstance(block, ListBlock):
+            self._render_list(word_document, block)
+            return
         if isinstance(block, Table):
             self._render_table(word_document, block)
             return
@@ -101,6 +104,13 @@ class DocxRenderer:
                 font.underline = fragment.style.underline
             if fragment.style.color is not None:
                 font.color.rgb = RGBColor.from_string(fragment.style.color)
+
+    def _render_list(self, word_document: WordDocument, list_block: ListBlock) -> None:
+        style_name = "List Number" if list_block.ordered else "List Bullet"
+        for item in list_block.items:
+            paragraph = word_document.add_paragraph(style=style_name)
+            self._apply_paragraph_style(paragraph, item.style)
+            self._append_runs(paragraph, item.content)
 
     def _render_table(self, word_document: WordDocument, table_block: Table) -> None:
         row_count = len(table_block.rows) + 1

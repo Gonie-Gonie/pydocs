@@ -13,9 +13,9 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.pdfbase import pdfmetrics
 from reportlab.platypus import Image as RLImage
-from reportlab.platypus import KeepTogether, Paragraph as RLParagraph, SimpleDocTemplate, Spacer, Table as RLTable, TableStyle
+from reportlab.platypus import KeepTogether, ListFlowable, ListItem as RLListItem, Paragraph as RLParagraph, SimpleDocTemplate, Spacer, Table as RLTable, TableStyle
 
-from docscriptor.model import Body, Document, Figure, Paragraph, ParagraphStyle, PathLike, Section, Table, Text, Theme
+from docscriptor.model import Body, Document, Figure, ListBlock, Paragraph, ParagraphStyle, PathLike, Section, Table, Text, Theme
 
 
 ALIGNMENTS = {
@@ -98,6 +98,8 @@ class PdfRenderer:
         if isinstance(block, Paragraph):
             paragraph_style = self._paragraph_style(block.style, theme, styles["BodyText"])
             return [RLParagraph(self._inline_markup(block.content, theme), paragraph_style)]
+        if isinstance(block, ListBlock):
+            return self._render_list(block, theme, styles)
         if isinstance(block, Table):
             return self._render_table(block, theme, styles)
         if isinstance(block, Figure):
@@ -160,6 +162,20 @@ class PdfRenderer:
         else:
             story.append(Spacer(1, 12))
         return story
+
+    def _render_list(self, block: ListBlock, theme: Theme, styles: object) -> list[object]:
+        item_style = self._paragraph_style(ParagraphStyle(space_after=3), theme, styles["BodyText"])
+        list_items = [
+            RLListItem(RLParagraph(self._inline_markup(item.content, theme), item_style))
+            for item in block.items
+        ]
+        flowable = ListFlowable(
+            list_items,
+            bulletType="1" if block.ordered else "bullet",
+            start="1",
+            leftIndent=18,
+        )
+        return [flowable, Spacer(1, 8)]
 
     def _render_figure(self, block: Figure, theme: Theme, styles: object) -> list[object]:
         image = RLImage(str(block.image_path))
