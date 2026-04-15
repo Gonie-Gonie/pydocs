@@ -75,7 +75,7 @@ function Invoke-PythonModuleWithTemp {
     Invoke-External -Command $PythonPath -Arguments (@("-c", $runner, $ModuleName, $tempRoot) + $ModuleArguments) -FailureMessage $FailureMessage
 }
 
-$repoRoot = $PSScriptRoot
+$repoRoot = Split-Path -Parent $PSScriptRoot
 $resolvedVenvPath = if ([System.IO.Path]::IsPathRooted($VenvPath)) {
     $VenvPath
 } else {
