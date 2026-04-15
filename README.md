@@ -89,7 +89,7 @@ report.save_pdf("artifacts/report.pdf")
 
 ## Example Script
 
-The repository also includes a runnable showcase script that exercises sections, inline styling, bullet lists, numbered lists, tables, figures, and subclassing:
+The repository also includes a runnable showcase script that exercises sections, inline styling, bullet lists, numbered lists, tables, and figures using a mostly variable-driven authoring style:
 
 ```powershell
 python -m examples.showcase
@@ -99,7 +99,8 @@ By default it writes these files under `artifacts/showcase/`:
 
 - `docscriptor-showcase.docx`
 - `docscriptor-showcase.pdf`
-- `showcase-image.png`
+
+The image used by the example is a bundled asset at `examples/assets/showcase-figure.png`.
 
 This example is also covered by automated tests so the generated outputs are checked continuously.
 
