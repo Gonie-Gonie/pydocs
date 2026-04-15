@@ -1,5 +1,59 @@
 """Top-level package for docscriptor."""
 
-__all__ = ["__version__"]
+from docscriptor.markup import md, markup
+from docscriptor.model import (
+    Body,
+    Code,
+    Document,
+    DocscriptorError,
+    Emphasis,
+    Figure,
+    Paragraph,
+    ParagraphStyle,
+    Section,
+    Strong,
+    Subsection,
+    Table,
+    Text,
+    TextStyle,
+    Theme,
+    body,
+    document,
+    figure,
+    paragraph,
+    section,
+    styled,
+    subsection,
+    table,
+)
 
 __version__ = "0.1.0"
+
+__all__ = [
+    "Body",
+    "Code",
+    "Document",
+    "DocscriptorError",
+    "Emphasis",
+    "Figure",
+    "Paragraph",
+    "ParagraphStyle",
+    "Section",
+    "Strong",
+    "Subsection",
+    "Table",
+    "Text",
+    "TextStyle",
+    "Theme",
+    "__version__",
+    "body",
+    "document",
+    "figure",
+    "md",
+    "markup",
+    "paragraph",
+    "section",
+    "styled",
+    "subsection",
+    "table",
+]

@@ -9,6 +9,59 @@ The long-term goal is to compose structured content in scripts, reuse templates 
 - make document generation programmable, testable, and reusable
 - support multiple export targets without committing to a TeX-centric workflow
 
+## Current Structure
+
+The package now ships with a basic document object model and two renderers:
+
+- block objects such as `Document`, `Body`, `Section`, `Subsection`, `Paragraph`, `Table`, and `Figure`
+- inline objects such as `Text`, `Strong`, `Emphasis`, `Code`, and `styled(...)`
+- a lightweight `markup(...)` helper for markdown-like inline bold, italic, and code formatting
+- render targets for `.docx` and `.pdf`
+
+Example:
+
+```python
+from docscriptor import (
+    Document,
+    Figure,
+    Paragraph,
+    Section,
+    Subsection,
+    Table,
+    markup,
+    styled,
+)
+
+report = Document(
+    "Experiment Report",
+    Section(
+        "Overview",
+        Paragraph(
+            "This document was written in Python with ",
+            styled("custom colors", color="#0055AA"),
+            " and ",
+            markup("**lightweight** *markup* support."),
+        ),
+        Subsection(
+            "Measurements",
+            Table(
+                headers=["Metric", "Value"],
+                rows=[
+                    ["Latency", "14 ms"],
+                    ["Success rate", "99.8%"],
+                ],
+                caption="Table 1. Summary metrics.",
+            ),
+        ),
+        Figure("example.png", caption=Paragraph("Figure 1. Example output."), width_inches=3.0),
+    ),
+    author="Docscriptor",
+)
+
+report.save_docx("artifacts/report.docx")
+report.save_pdf("artifacts/report.pdf")
+```
+
 ## Development
 
 Assuming Python 3.14 is already installed on the machine, run the setup script:
