@@ -23,6 +23,8 @@ class DocxRenderer:
     """Render docscriptor documents into DOCX files."""
 
     def render(self, document: Document, output_path: PathLike) -> Path:
+        """Render a docscriptor document to a DOCX file."""
+
         path = Path(output_path)
         path.parent.mkdir(parents=True, exist_ok=True)
 

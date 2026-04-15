@@ -6,7 +6,13 @@ from docscriptor.model import Code, Emphasis, Strong, Text, TextStyle
 
 
 def markup(source: str, *, style: TextStyle | None = None) -> list[Text]:
-    """Parse a lightweight markdown-like inline string."""
+    """Parse a lightweight markdown-like inline string.
+
+    Supported markers:
+    - ``**bold**``
+    - ``*italic*``
+    - `` `code` ``
+    """
 
     base_style = style or TextStyle()
     return _parse_markup(source, base_style)

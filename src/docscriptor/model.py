@@ -328,21 +328,29 @@ class Document:
         self.theme = theme or Theme()
 
     def save_docx(self, path: PathLike) -> Path:
+        """Render the document into a DOCX file and return the output path."""
+
         from docscriptor.renderers.docx import DocxRenderer
 
         return DocxRenderer().render(self, path)
 
     def save_pdf(self, path: PathLike) -> Path:
+        """Render the document into a PDF file and return the output path."""
+
         from docscriptor.renderers.pdf import PdfRenderer
 
         return PdfRenderer().render(self, path)
 
 
 def body(*children: BlockInput) -> Body:
+    """Create a top-level body container."""
+
     return Body(*children)
 
 
 def paragraph(*content: InlineInput, style: ParagraphStyle | None = None) -> Paragraph:
+    """Create a paragraph from inline fragments or strings."""
+
     return Paragraph(*content, style=style)
 
 
@@ -359,10 +367,14 @@ def numbered_list(*items: ListInput) -> ListBlock:
 
 
 def section(title: InlineInput, *children: BlockInput, level: int = 1) -> Section:
+    """Create a titled section with nested block children."""
+
     return Section(title, *children, level=level)
 
 
 def subsection(title: InlineInput, *children: BlockInput) -> Subsection:
+    """Create a second-level section."""
+
     return Subsection(title, *children)
 
 
@@ -373,10 +385,14 @@ def table(
     caption: CellInput | None = None,
     column_widths: Sequence[float] | None = None,
 ) -> Table:
+    """Create a table with headers, rows, and an optional caption."""
+
     return Table(headers, rows, caption=caption, column_widths=column_widths)
 
 
 def figure(image_path: PathLike, *, caption: CellInput | None = None, width_inches: float | None = None) -> Figure:
+    """Create a figure block from an image path and optional caption."""
+
     return Figure(image_path=image_path, caption=coerce_cell(caption) if caption is not None else None, width_inches=width_inches)
 
 
@@ -388,4 +404,6 @@ def document(
     summary: str | None = None,
     theme: Theme | None = None,
 ) -> Document:
+    """Create a renderable document."""
+
     return Document(title, *children, body=body, author=author, summary=summary, theme=theme)

@@ -51,6 +51,8 @@ class PdfRenderer:
     """Render docscriptor documents into PDF files."""
 
     def render(self, document: Document, output_path: PathLike) -> Path:
+        """Render a docscriptor document to a PDF file."""
+
         path = Path(output_path)
         path.parent.mkdir(parents=True, exist_ok=True)
 

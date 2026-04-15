@@ -15,8 +15,33 @@ The package now ships with a basic document object model and two renderers:
 
 - block objects such as `Document`, `Body`, `Section`, `Subsection`, `Paragraph`, `Table`, and `Figure`
 - inline objects such as `Text`, `Strong`, `Emphasis`, `Code`, and `styled(...)`
+- list objects through `bullet_list(...)`, `numbered_list(...)`, and `ListBlock`
 - a lightweight `markup(...)` helper for markdown-like inline bold, italic, and code formatting
 - render targets for `.docx` and `.pdf`
+
+## Authoring Model
+
+The intended workflow is:
+
+1. define a document tree with Python instances
+2. subclass the provided building blocks when you want reusable semantics
+3. render the same tree into one or more output formats
+
+The core model in `docscriptor.model` is intentionally class-based so users can build their own abstractions on top.
+For example, a team can subclass `Paragraph`, `Section`, or `Document` to create house styles, reusable callouts, or report templates.
+
+```python
+from docscriptor import Paragraph, ParagraphStyle, Strong
+
+
+class WarningParagraph(Paragraph):
+    def __init__(self, *content):
+        super().__init__(
+            Strong("Warning: "),
+            *content,
+            style=ParagraphStyle(space_after=14),
+        )
+```
 
 Example:
 
@@ -61,6 +86,22 @@ report = Document(
 report.save_docx("artifacts/report.docx")
 report.save_pdf("artifacts/report.pdf")
 ```
+
+## Example Script
+
+The repository also includes a runnable showcase script that exercises sections, inline styling, bullet lists, numbered lists, tables, figures, and subclassing:
+
+```powershell
+python -m examples.showcase
+```
+
+By default it writes these files under `artifacts/showcase/`:
+
+- `docscriptor-showcase.docx`
+- `docscriptor-showcase.pdf`
+- `showcase-image.png`
+
+This example is also covered by automated tests so the generated outputs are checked continuously.
 
 ## Development
 
