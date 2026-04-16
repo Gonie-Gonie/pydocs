@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 import struct
 import zlib
@@ -80,7 +81,7 @@ def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
 
 def _pdf_font_names(pdf_path: Path) -> set[str]:
     font_names: set[str] = set()
-    for page in PdfReader(str(pdf_path)).pages:
+    for page in PdfReader(BytesIO(pdf_path.read_bytes())).pages:
         resources = page.get("/Resources")
         if resources is None or "/Font" not in resources:
             continue
@@ -95,7 +96,7 @@ def _pdf_font_names(pdf_path: Path) -> set[str]:
 
 def _pdf_image_draw_count(pdf_path: Path) -> int:
     count = 0
-    for page in PdfReader(str(pdf_path)).pages:
+    for page in PdfReader(BytesIO(pdf_path.read_bytes())).pages:
         resources = page.get("/Resources")
         if resources is None or "/XObject" not in resources:
             continue
@@ -119,7 +120,7 @@ def _pdf_image_draw_count(pdf_path: Path) -> int:
 
 def _pdf_content_bytes(pdf_path: Path) -> bytes:
     parts: list[bytes] = []
-    for page in PdfReader(str(pdf_path)).pages:
+    for page in PdfReader(BytesIO(pdf_path.read_bytes())).pages:
         contents = page.get_contents()
         if contents is None:
             continue
@@ -427,7 +428,7 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert heading_styles["List of Figures"] == "Heading 2"
     assert heading_styles["References"] == "Heading 2"
 
-    pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(str(pdf_path)).pages)
+    pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf_path.read_bytes())).pages)
     assert "Pipeline Report" in pdf_text
     assert "Summary" in pdf_text
     assert "Highlights" in pdf_text

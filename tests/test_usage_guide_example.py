@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+from io import BytesIO
 from pathlib import Path
 
 from docx import Document as WordDocument
@@ -19,7 +20,7 @@ def _load_usage_guide_module():
 
 def _pdf_image_draw_count(pdf_path: Path) -> int:
     count = 0
-    for page in PdfReader(str(pdf_path)).pages:
+    for page in PdfReader(BytesIO(pdf_path.read_bytes())).pages:
         resources = page.get("/Resources")
         if resources is None or "/XObject" not in resources:
             continue
@@ -43,7 +44,7 @@ def _pdf_image_draw_count(pdf_path: Path) -> int:
 
 def _pdf_content_bytes(pdf_path: Path) -> bytes:
     parts: list[bytes] = []
-    for page in PdfReader(str(pdf_path)).pages:
+    for page in PdfReader(BytesIO(pdf_path.read_bytes())).pages:
         contents = page.get_contents()
         if contents is None:
             continue
@@ -105,12 +106,15 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert paragraph_texts.count("Figure 2. Repeated figure rendering example.") >= 2
     assert any("https://github.com/Gonie-Gonie/pydocs" in text for text in paragraph_texts)
     assert word_document.styles["Normal"].font.name == "Times New Roman"
+    assert paragraph_texts.index("List of Tables") < paragraph_texts.index("List of Figures")
+    assert paragraph_texts.index("List of Figures") < paragraph_texts.index("Contents")
+    assert paragraph_texts.index("Contents") < paragraph_texts.index("Getting Started")
     heading_styles = {paragraph.text: paragraph.style.name for paragraph in word_document.paragraphs if paragraph.text in {"List of Tables", "List of Figures", "References"}}
     assert heading_styles["List of Tables"] == "Heading 2"
     assert heading_styles["List of Figures"] == "Heading 2"
     assert heading_styles["References"] == "Heading 2"
 
-    pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(str(pdf_path)).pages)
+    pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf_path.read_bytes())).pages)
     assert "Using docscriptor" in pdf_text
     assert "Getting Started" in pdf_text
     assert "Core Building Blocks" in pdf_text
@@ -136,6 +140,9 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert "class WarningParagraph(Paragraph):" in pdf_text
     assert "https://github.com/Gonie-Gonie/pydocs" in pdf_text
     assert _pdf_image_draw_count(pdf_path) == 2
+    assert pdf_text.index("List of Tables") < pdf_text.index("List of Figures")
+    assert pdf_text.index("List of Figures") < pdf_text.index("Contents")
+    assert pdf_text.index("Contents") < pdf_text.index("Getting Started")
     assert b"15 Tf" in _pdf_text_context(pdf_path, "Contents")
     assert b"15 Tf" in _pdf_text_context(pdf_path, "List of Tables")
     assert b"15 Tf" in _pdf_text_context(pdf_path, "List of Figures")

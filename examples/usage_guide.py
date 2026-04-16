@@ -160,6 +160,8 @@ def build_usage_guide_document(output_dir: Path) -> Document:
 
     return Document(
         "Using docscriptor",
+        TableList(),
+        FigureList(),
         TableOfContents(),
         Chapter(
             "Getting Started",
@@ -290,8 +292,6 @@ def build_usage_guide_document(output_dir: Path) -> Document:
                     Monospace('"some-key"'),
                     ") when you want key-based lookup.",
                 ),
-                TableList(),
-                FigureList(),
             ),
         ),
         ReferencesPage(),
