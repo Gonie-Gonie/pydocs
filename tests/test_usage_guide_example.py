@@ -33,12 +33,14 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert "Hierarchy Depth" in paragraph_texts
     assert "When To Use CodeBlock" in paragraph_texts
     assert "Reusable Abstractions" in paragraph_texts
+    assert any("The default theme uses Times New Roman body text" in text for text in paragraph_texts)
     assert any("from docscriptor import Chapter, Document, Paragraph, Section" in text for text in paragraph_texts)
     assert any("class WarningParagraph(Paragraph):" in text for text in paragraph_texts)
     assert any(paragraph.style.name == "List Bullet" for paragraph in word_document.paragraphs)
     assert any(paragraph.style.name == "List Number" for paragraph in word_document.paragraphs)
     assert len(word_document.tables) == 1
     assert word_document.tables[0].cell(2, 1).text == "Paragraph, BulletList, NumberedList, CodeBlock, Table, Figure"
+    assert word_document.styles["Normal"].font.name == "Times New Roman"
 
     pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(str(pdf_path)).pages)
     assert "Using docscriptor" in pdf_text
@@ -50,5 +52,6 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert "BulletList" in pdf_text
     assert "NumberedList" in pdf_text
     assert "CodeBlock" in pdf_text
+    assert "The default theme uses Times New Roman body text" in pdf_text
     assert "from docscriptor import Chapter, Document, Paragraph, Section" in pdf_text
     assert "class WarningParagraph(Paragraph):" in pdf_text

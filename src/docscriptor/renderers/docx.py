@@ -51,6 +51,26 @@ class DocxRenderer:
         normal_style = word_document.styles["Normal"]
         normal_style.font.name = document.theme.body_font_name
         normal_style.font.size = Pt(document.theme.body_font_size)
+        normal_style.font.color.rgb = RGBColor(0, 0, 0)
+
+        self._configure_named_style(
+            word_document,
+            "Title",
+            font_name=document.theme.body_font_name,
+            font_size=document.theme.title_font_size,
+            bold=True,
+            italic=False,
+        )
+        for level in range(1, 5):
+            bold, italic = document.theme.heading_emphasis(level)
+            self._configure_named_style(
+                word_document,
+                f"Heading {level}",
+                font_name=document.theme.body_font_name,
+                font_size=document.theme.heading_size(level),
+                bold=bold,
+                italic=italic,
+            )
 
     def _render_block(self, word_document: WordDocument, block: object, theme: Theme) -> None:
         if isinstance(block, Body):
@@ -84,6 +104,12 @@ class DocxRenderer:
     def _add_heading(self, word_document: WordDocument, title: list[Text], level: int, theme: Theme) -> None:
         paragraph = word_document.add_paragraph()
         paragraph.style = "Title" if level == 0 else f"Heading {min(level, 9)}"
+        if level == 0:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        else:
+            paragraph.alignment = ALIGNMENTS[theme.heading_alignment(level)]
+            paragraph.paragraph_format.space_before = Pt(18 if level == 1 else 12)
+            paragraph.paragraph_format.space_after = Pt(10 if level == 1 else 6)
         self._append_runs(paragraph, title, default_size=theme.title_font_size if level == 0 else theme.heading_size(level))
 
     def _apply_paragraph_style(self, paragraph: object, style: ParagraphStyle) -> None:
@@ -127,7 +153,6 @@ class DocxRenderer:
             run.font.name = theme.monospace_font_name
             run.font.size = Pt(theme.caption_font_size)
             run.font.bold = True
-            run.font.color.rgb = RGBColor.from_string("5B6675")
 
         paragraph = word_document.add_paragraph()
         self._apply_paragraph_style(paragraph, code_block.style)
@@ -185,3 +210,20 @@ class DocxRenderer:
         shading.set(qn("w:color"), "auto")
         shading.set(qn("w:fill"), fill)
         paragraph_properties.append(shading)
+
+    def _configure_named_style(
+        self,
+        word_document: WordDocument,
+        style_name: str,
+        *,
+        font_name: str,
+        font_size: float,
+        bold: bool,
+        italic: bool,
+    ) -> None:
+        style = word_document.styles[style_name]
+        style.font.name = font_name
+        style.font.size = Pt(font_size)
+        style.font.bold = bold
+        style.font.italic = italic
+        style.font.color.rgb = RGBColor(0, 0, 0)

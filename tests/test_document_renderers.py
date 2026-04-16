@@ -5,6 +5,7 @@ from pathlib import Path
 
 import docscriptor
 from docx import Document as WordDocument
+from docx.shared import RGBColor
 from pypdf import PdfReader
 
 from docscriptor import (
@@ -41,6 +42,21 @@ def _write_sample_image(path: Path) -> None:
     path.write_bytes(SAMPLE_PNG)
 
 
+def _pdf_font_names(pdf_path: Path) -> set[str]:
+    font_names: set[str] = set()
+    for page in PdfReader(str(pdf_path)).pages:
+        resources = page.get("/Resources")
+        if resources is None or "/Font" not in resources:
+            continue
+        fonts = resources["/Font"].get_object()
+        for font in fonts.values():
+            font_object = font.get_object()
+            base_font = font_object.get("/BaseFont")
+            if base_font is not None:
+                font_names.add(str(base_font))
+    return font_names
+
+
 def test_version_is_defined() -> None:
     from docscriptor import __version__
 
@@ -53,7 +69,7 @@ def test_markup_creates_styled_fragments() -> None:
     assert [fragment.value for fragment in fragments] == ["plain ", "bold", " ", "italic", " ", "code"]
     assert fragments[1].style.bold is True
     assert fragments[3].style.italic is True
-    assert fragments[5].style.font_name == "Courier"
+    assert fragments[5].style.font_name == "Courier New"
 
 
 def test_list_classes_create_block_instances() -> None:
@@ -195,6 +211,17 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert len(word_document.tables) == 1
     assert word_document.tables[0].cell(1, 0).text == "DOCX"
     assert word_document.tables[0].cell(2, 1).text == "generated"
+    assert word_document.styles["Normal"].font.name == "Times New Roman"
+    assert word_document.styles["Title"].font.name == "Times New Roman"
+    assert word_document.styles["Heading 1"].font.name == "Times New Roman"
+    assert word_document.styles["Heading 2"].font.name == "Times New Roman"
+    assert word_document.styles["Heading 3"].font.name == "Times New Roman"
+    assert word_document.styles["Heading 4"].font.name == "Times New Roman"
+    assert word_document.styles["Title"].font.color.rgb == RGBColor(0, 0, 0)
+    assert word_document.styles["Heading 1"].font.color.rgb == RGBColor(0, 0, 0)
+    assert word_document.styles["Heading 2"].font.color.rgb == RGBColor(0, 0, 0)
+    assert word_document.styles["Heading 3"].font.color.rgb == RGBColor(0, 0, 0)
+    assert word_document.styles["Heading 4"].font.color.rgb == RGBColor(0, 0, 0)
 
     pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(str(pdf_path)).pages)
     assert "Pipeline Report" in pdf_text
@@ -208,3 +235,7 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert "from docscriptor import Document" in pdf_text
     assert "1\nLists render into both DOCX and PDF." not in pdf_text
     assert "1\nCreate the model" in pdf_text
+    pdf_fonts = _pdf_font_names(pdf_path)
+    assert "/Times-Roman" in pdf_fonts
+    assert "/Times-Bold" in pdf_fonts
+    assert pdf_fonts & {"/Times-BoldItalic", "/Times-Italic"}

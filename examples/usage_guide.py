@@ -73,9 +73,9 @@ GUIDE_DOCUMENT = Document(
             "Quick Start",
             Paragraph(
                 "Build a document tree with Python objects and render the same structure to ",
-                styled("DOCX", color="#004C99", bold=True),
+                styled("DOCX", bold=True),
                 " and ",
-                styled("PDF", color="#8A1C1C", bold=True),
+                styled("PDF", bold=True),
                 ".",
                 style=ParagraphStyle(space_after=14),
             ),
@@ -89,6 +89,9 @@ GUIDE_DOCUMENT = Document(
                 ", and ",
                 Strong("Paragraph"),
                 ". Use helper functions only where they transform content, such as inline styling or markup parsing.",
+            ),
+            Paragraph(
+                "The default theme uses Times New Roman body text and progressively stronger chapter and section styling so the hierarchy stays visible in both DOCX and PDF output."
             ),
             NumberedList(
                 "Import the model objects you need.",

@@ -74,16 +74,29 @@ class ParagraphStyle:
 class Theme:
     """Default document theme used by renderers."""
 
-    body_font_name: str = "Helvetica"
-    monospace_font_name: str = "Courier"
+    body_font_name: str = "Times New Roman"
+    monospace_font_name: str = "Courier New"
     title_font_size: float = 22.0
     body_font_size: float = 11.0
-    heading_sizes: tuple[float, ...] = (18.0, 16.0, 14.0, 12.0)
+    heading_sizes: tuple[float, ...] = (18.0, 15.0, 13.0, 11.5)
     caption_font_size: float = 9.0
 
     def heading_size(self, level: int) -> float:
         index = min(max(level - 1, 0), len(self.heading_sizes) - 1)
         return self.heading_sizes[index]
+
+    def heading_emphasis(self, level: int) -> tuple[bool, bool]:
+        emphasis = (
+            (True, False),
+            (True, False),
+            (True, True),
+            (False, True),
+        )
+        index = min(max(level - 1, 0), len(emphasis) - 1)
+        return emphasis[index]
+
+    def heading_alignment(self, level: int) -> str:
+        return "center" if level == 1 else "left"
 
 
 @dataclass(slots=True)
@@ -115,7 +128,7 @@ class Code(Text):
     """Monospace inline text."""
 
     def __init__(self, value: str, style: TextStyle | None = None) -> None:
-        super().__init__(value=value, style=TextStyle(font_name="Courier").merged(style))
+        super().__init__(value=value, style=TextStyle(font_name="Courier New").merged(style))
 
 
 def styled(value: str, **style_values: object) -> Text:

@@ -30,6 +30,7 @@ The intended workflow is:
 Instantiate structural nodes directly with classes such as `Document`, `Chapter`, `Section`, and `Paragraph`.
 That same rule applies to lists, so use `BulletList` and `NumberedList` directly instead of constructor-style wrapper functions.
 The remaining helper functions are reserved for places where they transform content, such as `styled(...)` and `markup(...)`.
+The default theme uses Times New Roman for body copy and progressively stronger heading treatment for chapter and section levels.
 
 The core model in `docscriptor.model` is intentionally class-based so users can build their own abstractions on top.
 For example, a team can subclass `Paragraph`, `Section`, or `Document` to create house styles, reusable callouts, or report templates.
@@ -72,7 +73,7 @@ report = Document(
             "Overview",
             Paragraph(
                 "This document was written in Python with ",
-                styled("custom colors", color="#0055AA"),
+                styled("custom emphasis", bold=True),
                 " and ",
                 markup("**lightweight** *markup* support."),
             ),

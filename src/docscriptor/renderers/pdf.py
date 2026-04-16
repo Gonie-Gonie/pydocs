@@ -46,6 +46,16 @@ PDF_FONT_VARIANTS = {
     },
 }
 
+FONT_FAMILY_ALIASES = {
+    "times new roman": "Times-Roman",
+    "times": "Times-Roman",
+    "times-roman": "Times-Roman",
+    "courier new": "Courier",
+    "courier": "Courier",
+    "helvetica": "Helvetica",
+    "arial": "Helvetica",
+}
+
 
 class PdfRenderer:
     """Render docscriptor documents into PDF files."""
@@ -63,11 +73,12 @@ class PdfRenderer:
         title_style = RLParagraphStyle(
             "DocscriptorTitle",
             parent=styles["Title"],
-            fontName=self._resolve_font(document.theme.body_font_name, False, False),
+            fontName=self._resolve_font(document.theme.body_font_name, True, False),
             fontSize=document.theme.title_font_size,
             leading=document.theme.title_font_size * 1.2,
             spaceAfter=18,
             alignment=TA_CENTER,
+            textColor=colors.black,
         )
         story.append(RLParagraph(escape(document.title), title_style))
 
@@ -84,14 +95,17 @@ class PdfRenderer:
                 story.extend(self._render_block(child, theme, styles))
             return story
         if isinstance(block, Section):
+            bold, italic = theme.heading_emphasis(block.level)
             title_style = RLParagraphStyle(
                 f"Heading{block.level}",
                 parent=styles["Heading1"],
-                fontName=self._resolve_font(theme.body_font_name, True, False),
+                fontName=self._resolve_font(theme.body_font_name, bold, italic),
                 fontSize=theme.heading_size(block.level),
                 leading=theme.heading_size(block.level) * 1.2,
-                spaceBefore=12,
-                spaceAfter=8,
+                spaceBefore=18 if block.level == 1 else 12,
+                spaceAfter=10 if block.level == 1 else 6,
+                alignment=ALIGNMENTS[theme.heading_alignment(block.level)],
+                textColor=colors.black,
             )
             story = [RLParagraph(self._inline_markup(block.title, theme), title_style)]
             for child in block.children:
@@ -119,6 +133,7 @@ class PdfRenderer:
             leading=style.leading or theme.body_font_size * 1.35,
             spaceAfter=style.space_after or 0,
             alignment=ALIGNMENTS[style.alignment],
+            textColor=colors.black,
         )
 
     def _render_table(self, block: Table, theme: Theme, styles: object) -> list[object]:
@@ -208,7 +223,6 @@ class PdfRenderer:
                 parent=styles["BodyText"],
                 fontName=self._resolve_font(theme.monospace_font_name, True, False),
                 fontSize=theme.caption_font_size,
-                textColor=colors.HexColor("#5B6675"),
                 spaceAfter=2,
             )
             elements.append(RLParagraph(escape(block.language.upper()), label_style))
@@ -261,9 +275,11 @@ class PdfRenderer:
         return "".join(parts) or "&nbsp;"
 
     def _resolve_font(self, font_name: str, bold: bool, italic: bool) -> str:
+        aliased_font_name = FONT_FAMILY_ALIASES.get(font_name.lower(), font_name)
+        font_name = aliased_font_name
         if font_name in PDF_FONT_VARIANTS:
             return PDF_FONT_VARIANTS[font_name][(bold, italic)]
         if font_name in pdfmetrics.getRegisteredFontNames():
             return font_name
-        fallback = "Courier" if "Courier" in font_name else "Helvetica"
+        fallback = "Courier" if "Courier" in font_name else "Times-Roman" if "Times" in font_name else "Helvetica"
         return PDF_FONT_VARIANTS[fallback][(bold, italic)]
