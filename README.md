@@ -13,7 +13,7 @@ The long-term goal is to compose structured content in scripts, reuse templates 
 
 The package now ships with a basic document object model and two renderers:
 
-- block objects such as `Document`, `Body`, `Section`, `Subsection`, `Paragraph`, `CodeBlock`, `Table`, and `Figure`
+- block objects such as `Document`, `Body`, `Chapter`, `Section`, `Subsection`, `Subsubsection`, `Paragraph`, `CodeBlock`, `Table`, and `Figure`
 - inline objects such as `Text`, `Strong`, `Emphasis`, `Code`, and `styled(...)`
 - list objects through `bullet_list(...)`, `numbered_list(...)`, and `ListBlock`
 - a lightweight `markup(...)` helper for markdown-like inline bold, italic, and code formatting
@@ -47,12 +47,14 @@ Example:
 
 ```python
 from docscriptor import (
+    Chapter,
     Document,
     CodeBlock,
     Figure,
     Paragraph,
     Section,
     Subsection,
+    Subsubsection,
     Table,
     markup,
     styled,
@@ -60,30 +62,36 @@ from docscriptor import (
 
 report = Document(
     "Experiment Report",
-    Section(
-        "Overview",
-        Paragraph(
-            "This document was written in Python with ",
-            styled("custom colors", color="#0055AA"),
-            " and ",
-            markup("**lightweight** *markup* support."),
-        ),
-        Subsection(
-            "Measurements",
-            Table(
-                headers=["Metric", "Value"],
-                rows=[
-                    ["Latency", "14 ms"],
-                    ["Success rate", "99.8%"],
-                ],
-                caption="Table 1. Summary metrics.",
+    Chapter(
+        "Analysis",
+        Section(
+            "Overview",
+            Paragraph(
+                "This document was written in Python with ",
+                styled("custom colors", color="#0055AA"),
+                " and ",
+                markup("**lightweight** *markup* support."),
             ),
+            Subsection(
+                "Measurements",
+                Table(
+                    headers=["Metric", "Value"],
+                    rows=[
+                        ["Latency", "14 ms"],
+                        ["Success rate", "99.8%"],
+                    ],
+                    caption="Table 1. Summary metrics.",
+                ),
+                Subsubsection(
+                    "Exports",
+                    CodeBlock(
+                        "report.save_docx('artifacts/report.docx')\nreport.save_pdf('artifacts/report.pdf')",
+                        language="python",
+                    ),
+                ),
+            ),
+            Figure("example.png", caption=Paragraph("Figure 1. Example output."), width_inches=3.0),
         ),
-        CodeBlock(
-            "report.save_docx('artifacts/report.docx')\nreport.save_pdf('artifacts/report.pdf')",
-            language="python",
-        ),
-        Figure("example.png", caption=Paragraph("Figure 1. Example output."), width_inches=3.0),
     ),
     author="Docscriptor",
 )

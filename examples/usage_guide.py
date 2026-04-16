@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from docscriptor import (
+    Chapter,
     CodeBlock,
     Document,
     Paragraph,
@@ -12,6 +13,7 @@ from docscriptor import (
     Section,
     Strong,
     Subsection,
+    Subsubsection,
     Table,
     bullet_list,
     markup,
@@ -22,13 +24,16 @@ from docscriptor import (
 
 OUTPUT_DIR = Path("artifacts") / "usage-guide"
 
-QUICK_START_SNIPPET = """from docscriptor import Document, Paragraph, Section
+QUICK_START_SNIPPET = """from docscriptor import Chapter, Document, Paragraph, Section
 
 doc = Document(
     "Hello docscriptor",
-    Section(
-        "Summary",
-        Paragraph("This document was defined with Python objects."),
+    Chapter(
+        "Getting Started",
+        Section(
+            "Summary",
+            Paragraph("This document was defined with Python objects."),
+        ),
     ),
 )
 
@@ -62,71 +67,92 @@ class NoteParagraph(Paragraph):
 
 GUIDE_DOCUMENT = Document(
     "Using docscriptor",
-    Section(
-        "Quick Start",
-        Paragraph(
-            "Build a document tree with Python objects and render the same structure to ",
-            styled("DOCX", color="#004C99", bold=True),
-            " and ",
-            styled("PDF", color="#8A1C1C", bold=True),
-            ".",
-            style=ParagraphStyle(space_after=14),
-        ),
-        numbered_list(
-            "Import the model objects you need.",
-            "Compose sections and paragraphs as regular Python instances.",
-            "Call save_docx() and save_pdf() on the document.",
-        ),
-        CodeBlock(QUICK_START_SNIPPET, language="python"),
-        NoteParagraph(
-            "Inline helpers such as ",
-            markup("**bold** text, *italic* text, and `code` fragments"),
-            " still work inside normal paragraphs.",
-        ),
-    ),
-    Section(
-        "Core Building Blocks",
-        Paragraph(
-            "The current model mixes block objects, inline fragments, and helper functions so documents stay easy to read in plain Python."
-        ),
-        Table(
-            headers=["Kind", "Examples", "Purpose"],
-            rows=[
-                ["Blocks", "Section, Paragraph, CodeBlock", "Document structure"],
-                ["Inline", "Text, Strong, Emphasis, Code", "Inline emphasis"],
-                ["Helpers", "bullet_list, numbered_list, markup", "Faster authoring"],
-            ],
-            caption="Table 1. Core authoring primitives.",
-            column_widths=[1.6, 2.7, 2.0],
-        ),
-        Subsection(
-            "When To Use CodeBlock",
-            bullet_list(
-                "Show a complete example without losing indentation.",
-                "Document reusable templates and helper classes.",
-                "Keep prose and code snippets inside the same generated guide.",
+    Chapter(
+        "Getting Started",
+        Section(
+            "Quick Start",
+            Paragraph(
+                "Build a document tree with Python objects and render the same structure to ",
+                styled("DOCX", color="#004C99", bold=True),
+                " and ",
+                styled("PDF", color="#8A1C1C", bold=True),
+                ".",
+                style=ParagraphStyle(space_after=14),
+            ),
+            numbered_list(
+                "Import the model objects you need.",
+                "Compose chapters, sections, and paragraphs as regular Python instances.",
+                "Call save_docx() and save_pdf() on the document.",
+            ),
+            CodeBlock(QUICK_START_SNIPPET, language="python"),
+            NoteParagraph(
+                "Inline helpers such as ",
+                markup("**bold** text, *italic* text, and `code` fragments"),
+                " still work inside normal paragraphs.",
             ),
         ),
     ),
-    Section(
-        "Reusable Abstractions",
-        Paragraph(
-            "Because the model is class-based, teams can wrap common patterns in their own subclasses instead of repeating styling rules."
+    Chapter(
+        "Authoring Model",
+        Section(
+            "Core Building Blocks",
+            Paragraph(
+                "The current model mixes heading classes, block objects, inline fragments, and helper functions so documents stay easy to read in plain Python."
+            ),
+            Table(
+                headers=["Kind", "Examples", "Purpose"],
+                rows=[
+                    ["Hierarchy", "Chapter, Section, Subsection, Subsubsection", "Document structure"],
+                    ["Blocks", "Paragraph, CodeBlock, Table, Figure", "Content layout"],
+                    ["Inline", "Text, Strong, Emphasis, Code", "Inline emphasis"],
+                    ["Helpers", "bullet_list, numbered_list, markup", "Faster authoring"],
+                ],
+                caption="Table 1. Core authoring primitives.",
+                column_widths=[1.6, 3.1, 1.8],
+            ),
+            Subsection(
+                "Hierarchy Depth",
+                Paragraph(
+                    "Use ",
+                    Strong("Chapter"),
+                    " for the largest division, then step down through ",
+                    Strong("Section"),
+                    ", ",
+                    Strong("Subsection"),
+                    ", and ",
+                    Strong("Subsubsection"),
+                    " as the document becomes more specific.",
+                ),
+                Subsubsection(
+                    "When To Use CodeBlock",
+                    bullet_list(
+                        "Show a complete example without losing indentation.",
+                        "Document reusable templates and helper classes.",
+                        "Keep prose and code snippets inside the same generated guide.",
+                    ),
+                ),
+            ),
         ),
-        CodeBlock(CUSTOM_BLOCK_SNIPPET, language="python"),
-        Paragraph(
-            "That pattern works especially well for recurring notices, report sections, or company-specific templates."
+        Section(
+            "Reusable Abstractions",
+            Paragraph(
+                "Because the model is class-based, teams can wrap common patterns in their own subclasses instead of repeating styling rules."
+            ),
+            CodeBlock(CUSTOM_BLOCK_SNIPPET, language="python"),
+            Paragraph(
+                "That pattern works especially well for recurring notices, report sections, or company-specific templates."
+            ),
         ),
-    ),
-    Section(
-        "Rendering Workflow",
-        Paragraph(
-            "A practical workflow is to keep the document definition in Python, generate outputs in CI, and review the resulting files where needed."
-        ),
-        bullet_list(
-            "Use DOCX when you want editable handoff files.",
-            "Use PDF when you want stable distribution output.",
-            "Keep examples in version control so the API stays exercised.",
+        Section(
+            "Rendering Workflow",
+            Paragraph(
+                "A practical workflow is to keep the document definition in Python, generate outputs in CI, and review the resulting files where needed."
+            ),
+            bullet_list(
+                "Use DOCX when you want editable handoff files.",
+                "Use PDF when you want stable distribution output.",
+                "Keep examples in version control so the API stays exercised.",
+            ),
         ),
     ),
     author="docscriptor examples",

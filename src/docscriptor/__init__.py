@@ -3,6 +3,7 @@
 from docscriptor.markup import md, markup
 from docscriptor.model import (
     Body,
+    Chapter,
     Code,
     CodeBlock,
     Document,
@@ -15,12 +16,14 @@ from docscriptor.model import (
     Section,
     Strong,
     Subsection,
+    Subsubsection,
     Table,
     Text,
     TextStyle,
     Theme,
     body,
     bullet_list,
+    chapter,
     code_block,
     document,
     figure,
@@ -29,6 +32,7 @@ from docscriptor.model import (
     section,
     styled,
     subsection,
+    subsubsection,
     table,
 )
 
@@ -36,6 +40,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     "Body",
+    "Chapter",
     "Code",
     "CodeBlock",
     "Document",
@@ -48,6 +53,7 @@ __all__ = [
     "Section",
     "Strong",
     "Subsection",
+    "Subsubsection",
     "Table",
     "Text",
     "TextStyle",
@@ -55,6 +61,7 @@ __all__ = [
     "__version__",
     "body",
     "bullet_list",
+    "chapter",
     "code_block",
     "document",
     "figure",
@@ -65,5 +72,6 @@ __all__ = [
     "section",
     "styled",
     "subsection",
+    "subsubsection",
     "table",
 ]

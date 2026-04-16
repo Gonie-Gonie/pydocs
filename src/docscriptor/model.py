@@ -239,7 +239,7 @@ class Section(Block):
     children: list[Block]
     level: int
 
-    def __init__(self, title: InlineInput, *children: BlockInput, level: int = 1) -> None:
+    def __init__(self, title: InlineInput, *children: BlockInput, level: int = 2) -> None:
         if level < 1:
             raise ValueError("Section level must be >= 1")
         self.title = coerce_inlines((title,))
@@ -250,11 +250,25 @@ class Section(Block):
         return "".join(fragment.plain_text() for fragment in self.title)
 
 
-class Subsection(Section):
-    """Convenience wrapper for second-level sections."""
+class Chapter(Section):
+    """First-level document division."""
 
     def __init__(self, title: InlineInput, *children: BlockInput) -> None:
-        super().__init__(title, *children, level=2)
+        super().__init__(title, *children, level=1)
+
+
+class Subsection(Section):
+    """Third-level document division."""
+
+    def __init__(self, title: InlineInput, *children: BlockInput) -> None:
+        super().__init__(title, *children, level=3)
+
+
+class Subsubsection(Section):
+    """Fourth-level document division."""
+
+    def __init__(self, title: InlineInput, *children: BlockInput) -> None:
+        super().__init__(title, *children, level=4)
 
 
 CellInput = Paragraph | InlineInput
@@ -381,16 +395,28 @@ def code_block(code: str, *, language: str | None = None, style: ParagraphStyle 
     return CodeBlock(code=code, language=language, style=style or ParagraphStyle(space_after=12.0))
 
 
-def section(title: InlineInput, *children: BlockInput, level: int = 1) -> Section:
+def chapter(title: InlineInput, *children: BlockInput) -> Chapter:
+    """Create a first-level document division."""
+
+    return Chapter(title, *children)
+
+
+def section(title: InlineInput, *children: BlockInput, level: int = 2) -> Section:
     """Create a titled section with nested block children."""
 
     return Section(title, *children, level=level)
 
 
 def subsection(title: InlineInput, *children: BlockInput) -> Subsection:
-    """Create a second-level section."""
+    """Create a third-level document division."""
 
     return Subsection(title, *children)
+
+
+def subsubsection(title: InlineInput, *children: BlockInput) -> Subsubsection:
+    """Create a fourth-level document division."""
+
+    return Subsubsection(title, *children)
 
 
 def table(
