@@ -27,6 +27,9 @@ The intended workflow is:
 2. subclass the provided building blocks when you want reusable semantics
 3. render the same tree into one or more output formats
 
+Instantiate structural nodes directly with classes such as `Document`, `Chapter`, `Section`, and `Paragraph`.
+The remaining helper functions are reserved for places where they add real behavior, such as `bullet_list(...)`, `numbered_list(...)`, `styled(...)`, and `markup(...)`.
+
 The core model in `docscriptor.model` is intentionally class-based so users can build their own abstractions on top.
 For example, a team can subclass `Paragraph`, `Section`, or `Document` to create house styles, reusable callouts, or report templates.
 

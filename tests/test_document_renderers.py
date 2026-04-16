@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 from pathlib import Path
 
+import docscriptor
 from docx import Document as WordDocument
 from pypdf import PdfReader
 
@@ -83,6 +84,29 @@ def test_heading_hierarchy_uses_latex_like_levels() -> None:
     assert chapter.children[0].level == 2
     assert chapter.children[0].children[0].level == 3
     assert chapter.children[0].children[0].children[0].level == 4
+
+
+def test_public_api_prefers_classes_for_structural_nodes() -> None:
+    assert hasattr(docscriptor, "Document")
+    assert hasattr(docscriptor, "Chapter")
+    assert hasattr(docscriptor, "Section")
+    assert hasattr(docscriptor, "Paragraph")
+    assert hasattr(docscriptor, "Table")
+    assert hasattr(docscriptor, "Figure")
+
+    for removed_name in (
+        "document",
+        "body",
+        "chapter",
+        "section",
+        "subsection",
+        "subsubsection",
+        "paragraph",
+        "code_block",
+        "table",
+        "figure",
+    ):
+        assert not hasattr(docscriptor, removed_name)
 
 
 def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:

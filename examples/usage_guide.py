@@ -79,6 +79,17 @@ GUIDE_DOCUMENT = Document(
                 ".",
                 style=ParagraphStyle(space_after=14),
             ),
+            Paragraph(
+                "Instantiate structural nodes directly with classes such as ",
+                Strong("Document"),
+                ", ",
+                Strong("Chapter"),
+                ", ",
+                Strong("Section"),
+                ", and ",
+                Strong("Paragraph"),
+                ". Use helper functions only where they add behavior, such as list creation or inline markup.",
+            ),
             numbered_list(
                 "Import the model objects you need.",
                 "Compose chapters, sections, and paragraphs as regular Python instances.",
@@ -97,7 +108,7 @@ GUIDE_DOCUMENT = Document(
         Section(
             "Core Building Blocks",
             Paragraph(
-                "The current model mixes heading classes, block objects, inline fragments, and helper functions so documents stay easy to read in plain Python."
+                "The current model mixes heading classes, block objects, inline fragments, and a small set of authoring helpers so documents stay easy to read in plain Python."
             ),
             Table(
                 headers=["Kind", "Examples", "Purpose"],

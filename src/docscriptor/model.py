@@ -364,19 +364,6 @@ class Document:
 
         return PdfRenderer().render(self, path)
 
-
-def body(*children: BlockInput) -> Body:
-    """Create a top-level body container."""
-
-    return Body(*children)
-
-
-def paragraph(*content: InlineInput, style: ParagraphStyle | None = None) -> Paragraph:
-    """Create a paragraph from inline fragments or strings."""
-
-    return Paragraph(*content, style=style)
-
-
 def bullet_list(*items: ListInput) -> ListBlock:
     """Create a bullet list from paragraph or inline values."""
 
@@ -387,64 +374,3 @@ def numbered_list(*items: ListInput) -> ListBlock:
     """Create a numbered list from paragraph or inline values."""
 
     return ListBlock(*items, ordered=True)
-
-
-def code_block(code: str, *, language: str | None = None, style: ParagraphStyle | None = None) -> CodeBlock:
-    """Create a block-level preformatted code snippet."""
-
-    return CodeBlock(code=code, language=language, style=style or ParagraphStyle(space_after=12.0))
-
-
-def chapter(title: InlineInput, *children: BlockInput) -> Chapter:
-    """Create a first-level document division."""
-
-    return Chapter(title, *children)
-
-
-def section(title: InlineInput, *children: BlockInput, level: int = 2) -> Section:
-    """Create a titled section with nested block children."""
-
-    return Section(title, *children, level=level)
-
-
-def subsection(title: InlineInput, *children: BlockInput) -> Subsection:
-    """Create a third-level document division."""
-
-    return Subsection(title, *children)
-
-
-def subsubsection(title: InlineInput, *children: BlockInput) -> Subsubsection:
-    """Create a fourth-level document division."""
-
-    return Subsubsection(title, *children)
-
-
-def table(
-    headers: Sequence[CellInput],
-    rows: Sequence[Sequence[CellInput]],
-    *,
-    caption: CellInput | None = None,
-    column_widths: Sequence[float] | None = None,
-) -> Table:
-    """Create a table with headers, rows, and an optional caption."""
-
-    return Table(headers, rows, caption=caption, column_widths=column_widths)
-
-
-def figure(image_path: PathLike, *, caption: CellInput | None = None, width_inches: float | None = None) -> Figure:
-    """Create a figure block from an image path and optional caption."""
-
-    return Figure(image_path=image_path, caption=coerce_cell(caption) if caption is not None else None, width_inches=width_inches)
-
-
-def document(
-    title: str,
-    *children: BlockInput,
-    body: Body | None = None,
-    author: str | None = None,
-    summary: str | None = None,
-    theme: Theme | None = None,
-) -> Document:
-    """Create a renderable document."""
-
-    return Document(title, *children, body=body, author=author, summary=summary, theme=theme)
