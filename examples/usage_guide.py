@@ -7,14 +7,12 @@ from pathlib import Path
 
 from docscriptor import (
     BulletList,
-    Citation,
     CitationSource,
     Chapter,
     CodeBlock,
     Document,
     Figure,
     FigureList,
-    FigureReference,
     NumberedList,
     Paragraph,
     ParagraphStyle,
@@ -25,7 +23,7 @@ from docscriptor import (
     Subsubsection,
     Table,
     TableList,
-    TableReference,
+    cite,
     markup,
     styled,
 )
@@ -87,6 +85,44 @@ def build_usage_guide_document(output_dir: Path) -> Document:
     figure_path = output_dir / "usage-guide-figure.png"
     _write_sample_image(figure_path)
 
+    repository_source = CitationSource(
+        "pydocs",
+        organization="Gonie-Gonie",
+        publisher="GitHub repository",
+        year="2026",
+        url="https://github.com/Gonie-Gonie/pydocs",
+    )
+    primitive_summary_table = Table(
+        headers=["Kind", "Examples", "Purpose"],
+        rows=[
+            ["Hierarchy", "Chapter, Section, Subsection, Subsubsection", "Document structure"],
+            ["Blocks", "Paragraph, BulletList, NumberedList, CodeBlock, Table, Figure", "Content layout"],
+            ["Inline", "Text, Strong, Emphasis, Code", "Inline emphasis"],
+            ["Helpers", "markup, styled, cite", "Authoring shortcuts"],
+        ],
+        caption="Core authoring primitives.",
+        column_widths=[1.6, 3.1, 1.8],
+    )
+    hierarchy_overview_figure = Figure(
+        figure_path,
+        caption="Heading hierarchy example output.",
+        width_inches=1.4,
+    )
+    workflow_output_table = Table(
+        headers=["Goal", "Preferred Output"],
+        rows=[
+            ["Editable review", "DOCX"],
+            ["Stable distribution", "PDF"],
+        ],
+        caption="Rendering outputs by goal.",
+        column_widths=[2.4, 2.6],
+    )
+    rendering_preview_figure = Figure(
+        figure_path,
+        caption="Repeated figure rendering example.",
+        width_inches=1.8,
+    )
+
     return Document(
         "Using docscriptor",
         Chapter(
@@ -117,9 +153,9 @@ def build_usage_guide_document(output_dir: Path) -> Document:
                 ),
                 Paragraph(
                     "See ",
-                    TableReference("primitive-summary"),
+                    primitive_summary_table,
                     " for the core block inventory and ",
-                    FigureReference("hierarchy-overview"),
+                    hierarchy_overview_figure,
                     " for a compact figure example that can be cited from prose.",
                 ),
                 NumberedList(
@@ -142,21 +178,10 @@ def build_usage_guide_document(output_dir: Path) -> Document:
                 Paragraph(
                     "The current model mixes heading classes, block objects, inline fragments, and a small set of authoring helpers so documents stay easy to read in plain Python."
                 ),
-                Table(
-                    identifier="primitive-summary",
-                    headers=["Kind", "Examples", "Purpose"],
-                    rows=[
-                        ["Hierarchy", "Chapter, Section, Subsection, Subsubsection", "Document structure"],
-                        ["Blocks", "Paragraph, BulletList, NumberedList, CodeBlock, Table, Figure", "Content layout"],
-                        ["Inline", "Text, Strong, Emphasis, Code", "Inline emphasis"],
-                        ["Helpers", "markup, styled", "Inline authoring shortcuts"],
-                    ],
-                    caption="Core authoring primitives.",
-                    column_widths=[1.6, 3.1, 1.8],
-                ),
+                primitive_summary_table,
                 Paragraph(
                     "The rendering matrix in ",
-                    TableReference("workflow-output"),
+                    workflow_output_table,
                     " complements the structural summary with output-oriented guidance.",
                 ),
                 Subsection(
@@ -172,12 +197,7 @@ def build_usage_guide_document(output_dir: Path) -> Document:
                         Strong("Subsubsection"),
                         " as the document becomes more specific.",
                     ),
-                    Figure(
-                        figure_path,
-                        identifier="hierarchy-overview",
-                        caption="Heading hierarchy example output.",
-                        width_inches=1.4,
-                    ),
+                    hierarchy_overview_figure,
                     Subsubsection(
                         "When To Use CodeBlock",
                         BulletList(
@@ -202,27 +222,13 @@ def build_usage_guide_document(output_dir: Path) -> Document:
                 "Rendering Workflow",
                 Paragraph(
                     "Use ",
-                    FigureReference("rendering-preview"),
+                    rendering_preview_figure,
                     " together with ",
-                    TableReference("workflow-output"),
+                    workflow_output_table,
                     " when comparing delivery formats."
                 ),
-                Table(
-                    identifier="workflow-output",
-                    headers=["Goal", "Preferred Output"],
-                    rows=[
-                        ["Editable review", "DOCX"],
-                        ["Stable distribution", "PDF"],
-                    ],
-                    caption="Rendering outputs by goal.",
-                    column_widths=[2.4, 2.6],
-                ),
-                Figure(
-                    figure_path,
-                    identifier="rendering-preview",
-                    caption="Repeated figure rendering example.",
-                    width_inches=1.8,
-                ),
+                workflow_output_table,
+                rendering_preview_figure,
                 BulletList(
                     "Use DOCX when you want editable handoff files.",
                     "Use PDF when you want stable distribution output.",
@@ -236,8 +242,17 @@ def build_usage_guide_document(output_dir: Path) -> Document:
                 ),
                 Paragraph(
                     "The project repository itself can be cited inline, as shown by ",
-                    Citation("pydocs-repository"),
+                    cite(repository_source),
                     "."
+                ),
+                Paragraph(
+                    "For existing BibTeX data, pass a bibliography string to ",
+                    Strong("Document"),
+                    " and call ",
+                    Strong("cite"),
+                    "(",
+                    styled('"some-key"', font_name="Courier New"),
+                    ") when you want key-based lookup.",
                 ),
                 TableList(),
                 FigureList(),
@@ -246,16 +261,6 @@ def build_usage_guide_document(output_dir: Path) -> Document:
         ReferencesPage(),
         author="docscriptor examples",
         summary="Usage guide document",
-        citations=[
-            CitationSource(
-                key="pydocs-repository",
-                organization="Gonie-Gonie",
-                title="pydocs",
-                publisher="GitHub repository",
-                year="2026",
-                url="https://github.com/Gonie-Gonie/pydocs",
-            )
-        ],
     )
 
 

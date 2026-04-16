@@ -137,47 +137,37 @@ class Code(Text):
         super().__init__(value=value, style=TextStyle(font_name="Courier New").merged(style))
 
 
-class TableReference(Text):
-    """Inline reference to a numbered table."""
+class _BlockReference(Text):
+    """Inline reference to a numbered table or figure."""
 
-    __slots__ = ("target", "prefix")
+    __slots__ = ("target",)
 
-    def __init__(self, target: str, *, prefix: str | None = None, style: TextStyle | None = None) -> None:
+    def __init__(self, target: Table | Figure, style: TextStyle | None = None) -> None:
         super().__init__(value="", style=style or TextStyle())
         self.target = target
-        self.prefix = prefix
 
     def plain_text(self) -> str:
-        label = self.prefix or "Table"
-        return f"{label} ?"
-
-
-class FigureReference(Text):
-    """Inline reference to a numbered figure."""
-
-    __slots__ = ("target", "prefix")
-
-    def __init__(self, target: str, *, prefix: str | None = None, style: TextStyle | None = None) -> None:
-        super().__init__(value="", style=style or TextStyle())
-        self.target = target
-        self.prefix = prefix
-
-    def plain_text(self) -> str:
-        label = self.prefix or "Figure"
+        label = "Table" if isinstance(self.target, Table) else "Figure"
         return f"{label} ?"
 
 
 class Citation(Text):
     """Inline citation rendered from a bibliography entry."""
 
-    __slots__ = ("key",)
+    __slots__ = ("target",)
 
-    def __init__(self, key: str, style: TextStyle | None = None) -> None:
+    def __init__(self, target: CitationSource | str, style: TextStyle | None = None) -> None:
         super().__init__(value="", style=style or TextStyle())
-        self.key = key
+        self.target = target
 
     def plain_text(self) -> str:
         return "[?]"
+
+
+def cite(target: CitationSource | str, *, style: TextStyle | None = None) -> Citation:
+    """Create an inline citation for a bibliography entry or registered key."""
+
+    return Citation(target, style=style)
 
 
 def styled(value: str, **style_values: object) -> Text:
@@ -198,6 +188,9 @@ def coerce_inlines(values: Iterable[InlineInput]) -> list[Text]:
             continue
         if isinstance(value, Text):
             normalized.append(value)
+            continue
+        if isinstance(value, (Table, Figure)):
+            normalized.append(_BlockReference(value))
             continue
         if isinstance(value, str):
             normalized.append(Text(value))
@@ -432,18 +425,39 @@ class Figure(Block):
             self.caption = coerce_cell(self.caption)
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, init=False)
 class CitationSource:
     """A bibliography entry defined with Python data."""
 
-    key: str
     title: str
+    key: str | None
     authors: tuple[str, ...] = ()
     organization: str | None = None
     publisher: str | None = None
     year: str | None = None
     url: str | None = None
     note: str | None = None
+
+    def __init__(
+        self,
+        title: str,
+        *,
+        key: str | None = None,
+        authors: Sequence[str] = (),
+        organization: str | None = None,
+        publisher: str | None = None,
+        year: str | None = None,
+        url: str | None = None,
+        note: str | None = None,
+    ) -> None:
+        self.title = title
+        self.key = key
+        self.authors = tuple(authors)
+        self.organization = organization
+        self.publisher = publisher
+        self.year = year
+        self.url = url
+        self.note = note
 
     def format_reference(self) -> str:
         segments: list[str] = []
@@ -485,6 +499,8 @@ class CitationLibrary:
                 self.add(entry)
 
     def add(self, entry: CitationSource) -> None:
+        if not entry.key:
+            raise DocscriptorError("CitationSource.key is required when adding entries to a CitationLibrary")
         if entry.key in self.entries:
             raise DocscriptorError(f"Duplicate citation key: {entry.key!r}")
         self.entries[entry.key] = entry
@@ -501,8 +517,8 @@ class CitationLibrary:
             authors = tuple(part.strip() for part in fields.get("author", "").split(" and ") if part.strip())
             entries.append(
                 CitationSource(
-                    key=key,
                     title=fields.get("title", key),
+                    key=key,
                     authors=authors,
                     organization=fields.get("organization") or fields.get("institution"),
                     publisher=fields.get("publisher") or fields.get("journal") or fields.get("booktitle") or fields.get("howpublished"),
@@ -530,10 +546,9 @@ class RenderIndex:
     figures: list[CaptionEntry] = field(default_factory=list)
     table_numbers: dict[int, int] = field(default_factory=dict)
     figure_numbers: dict[int, int] = field(default_factory=dict)
-    table_identifiers: dict[str, int] = field(default_factory=dict)
-    figure_identifiers: dict[str, int] = field(default_factory=dict)
     citations: list[CitationReferenceEntry] = field(default_factory=list)
     citation_numbers: dict[str, int] = field(default_factory=dict)
+    citation_source_numbers: dict[int, int] = field(default_factory=dict)
 
     def table_number(self, table: Table) -> int | None:
         return self.table_numbers.get(id(table))
@@ -541,20 +556,17 @@ class RenderIndex:
     def figure_number(self, figure: Figure) -> int | None:
         return self.figure_numbers.get(id(figure))
 
-    def resolve_table(self, target: str) -> int:
-        if target not in self.table_identifiers:
-            raise DocscriptorError(f"Unknown table reference: {target!r}")
-        return self.table_identifiers[target]
-
-    def resolve_figure(self, target: str) -> int:
-        if target not in self.figure_identifiers:
-            raise DocscriptorError(f"Unknown figure reference: {target!r}")
-        return self.figure_identifiers[target]
-
-    def citation_number(self, key: str) -> int:
-        if key not in self.citation_numbers:
-            raise DocscriptorError(f"Unknown citation key: {key!r}")
-        return self.citation_numbers[key]
+    def citation_number(self, target: CitationSource | str) -> int:
+        if isinstance(target, CitationSource):
+            if target.key is not None and target.key in self.citation_numbers:
+                return self.citation_numbers[target.key]
+            source_id = id(target)
+            if source_id in self.citation_source_numbers:
+                return self.citation_source_numbers[source_id]
+            raise DocscriptorError(f"Unknown citation source: {target.title!r}")
+        if target not in self.citation_numbers:
+            raise DocscriptorError(f"Unknown citation key: {target!r}")
+        return self.citation_numbers[target]
 
 
 def build_render_index(document: Document) -> RenderIndex:
@@ -593,10 +605,6 @@ def _index_blocks(blocks: Sequence[Block], render_index: RenderIndex, citations:
                 number = len(render_index.tables) + 1
                 render_index.tables.append(CaptionEntry(number=number, block=block))
                 render_index.table_numbers[id(block)] = number
-                if block.identifier is not None:
-                    if block.identifier in render_index.table_identifiers:
-                        raise DocscriptorError(f"Duplicate table identifier: {block.identifier!r}")
-                    render_index.table_identifiers[block.identifier] = number
             continue
         if isinstance(block, Figure):
             if block.caption is not None:
@@ -604,20 +612,31 @@ def _index_blocks(blocks: Sequence[Block], render_index: RenderIndex, citations:
                 number = len(render_index.figures) + 1
                 render_index.figures.append(CaptionEntry(number=number, block=block))
                 render_index.figure_numbers[id(block)] = number
-                if block.identifier is not None:
-                    if block.identifier in render_index.figure_identifiers:
-                        raise DocscriptorError(f"Duplicate figure identifier: {block.identifier!r}")
-                    render_index.figure_identifiers[block.identifier] = number
             continue
 
 
 def _index_inlines(fragments: Sequence[Text], render_index: RenderIndex, citations: CitationLibrary) -> None:
     for fragment in fragments:
-        if isinstance(fragment, Citation) and fragment.key not in render_index.citation_numbers:
-            source = citations.resolve(fragment.key)
-            number = len(render_index.citations) + 1
-            render_index.citations.append(CitationReferenceEntry(number=number, source=source))
-            render_index.citation_numbers[fragment.key] = number
+        if not isinstance(fragment, Citation):
+            continue
+
+        target = fragment.target
+        if isinstance(target, CitationSource):
+            if target.key is not None and target.key in render_index.citation_numbers:
+                continue
+            if id(target) in render_index.citation_source_numbers:
+                continue
+            source = target
+        else:
+            if target in render_index.citation_numbers:
+                continue
+            source = citations.resolve(target)
+
+        number = len(render_index.citations) + 1
+        render_index.citations.append(CitationReferenceEntry(number=number, source=source))
+        render_index.citation_source_numbers[id(source)] = number
+        if source.key is not None:
+            render_index.citation_numbers[source.key] = number
 
 
 def _coerce_citation_library(value: CitationLibrary | Sequence[CitationSource] | str | None) -> CitationLibrary:

@@ -16,14 +16,15 @@ from reportlab.platypus import Image as RLImage
 from reportlab.platypus import KeepTogether, ListFlowable, ListItem as RLListItem, PageBreak, Paragraph as RLParagraph, Preformatted, SimpleDocTemplate, Spacer, Table as RLTable, TableStyle
 
 from docscriptor.model import (
+    _BlockReference,
     Body,
     BulletList,
     Citation,
     CodeBlock,
     Document,
+    DocscriptorError,
     Figure,
     FigureList,
-    FigureReference,
     NumberedList,
     Paragraph,
     ParagraphStyle,
@@ -33,7 +34,6 @@ from docscriptor.model import (
     Section,
     Table,
     TableList,
-    TableReference,
     Text,
     Theme,
     build_render_index,
@@ -324,15 +324,23 @@ class PdfRenderer:
         return PDF_FONT_VARIANTS[fallback][(bold, italic)]
 
     def _resolve_fragment_text(self, fragment: Text, theme: Theme, render_index: RenderIndex) -> str:
-        if isinstance(fragment, TableReference):
-            label = fragment.prefix or theme.table_label
-            return f"{label} {render_index.resolve_table(fragment.target)}"
-        if isinstance(fragment, FigureReference):
-            label = fragment.prefix or theme.figure_label
-            return f"{label} {render_index.resolve_figure(fragment.target)}"
+        if isinstance(fragment, _BlockReference):
+            return self._resolve_block_reference(fragment.target, theme, render_index)
         if isinstance(fragment, Citation):
-            return f"[{render_index.citation_number(fragment.key)}]"
+            return f"[{render_index.citation_number(fragment.target)}]"
         return fragment.value
+
+    def _resolve_block_reference(self, target: Table | Figure, theme: Theme, render_index: RenderIndex) -> str:
+        if isinstance(target, Table):
+            number = render_index.table_number(target)
+            if number is None:
+                raise DocscriptorError("Table references require the target table to have a caption and be included in the document")
+            return f"{theme.table_label} {number}"
+
+        number = render_index.figure_number(target)
+        if number is None:
+            raise DocscriptorError("Figure references require the target figure to have a caption and be included in the document")
+        return f"{theme.figure_label} {number}"
 
     def _caption_fragments(self, label: str, number: int | None, caption: Paragraph) -> list[Text]:
         if number is None:

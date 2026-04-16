@@ -10,7 +10,6 @@ from pypdf import PdfReader
 
 from docscriptor import (
     BulletList,
-    Citation,
     CitationSource,
     Chapter,
     Code,
@@ -19,7 +18,6 @@ from docscriptor import (
     Emphasis,
     Figure,
     FigureList,
-    FigureReference,
     NumberedList,
     Paragraph,
     ParagraphStyle,
@@ -30,7 +28,7 @@ from docscriptor import (
     Subsubsection,
     Table,
     TableList,
-    TableReference,
+    cite,
     markup,
     styled,
 )
@@ -118,11 +116,13 @@ def test_public_api_prefers_classes_for_structural_nodes() -> None:
     assert hasattr(docscriptor, "NumberedList")
     assert hasattr(docscriptor, "TableList")
     assert hasattr(docscriptor, "FigureList")
-    assert hasattr(docscriptor, "TableReference")
-    assert hasattr(docscriptor, "FigureReference")
+    assert hasattr(docscriptor, "cite")
     assert hasattr(docscriptor, "Table")
     assert hasattr(docscriptor, "Figure")
     assert not hasattr(docscriptor, "ListBlock")
+    assert not hasattr(docscriptor, "Citation")
+    assert not hasattr(docscriptor, "TableReference")
+    assert not hasattr(docscriptor, "FigureReference")
 
     for removed_name in (
         "document",
@@ -164,6 +164,56 @@ def test_bibtex_string_creates_citation_library() -> None:
 def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     image_path = tmp_path / "sample.png"
     _write_sample_image(image_path)
+    repository_source = CitationSource(
+        "pydocs",
+        organization="Gonie-Gonie",
+        publisher="GitHub repository",
+        year="2026",
+        url="https://github.com/Gonie-Gonie/pydocs",
+    )
+    registered_source = CitationSource(
+        "Release Notes",
+        key="release-notes",
+        organization="Gonie-Gonie",
+        publisher="Documentation index",
+        year="2026",
+        url="https://github.com/Gonie-Gonie/pydocs/releases",
+    )
+    unused_source = CitationSource(
+        "Internal Draft",
+        key="internal-draft",
+        organization="Gonie-Gonie",
+        year="2026",
+        url="https://example.invalid/internal-draft",
+    )
+    artifacts_table = Table(
+        headers=["Type", "Status"],
+        rows=[
+            ["DOCX", "generated"],
+            ["PDF", "generated"],
+        ],
+        caption="Generated artifacts.",
+        column_widths=[2.5, 2.5],
+    )
+    workflow_table = Table(
+        headers=["Step", "Target"],
+        rows=[
+            ["Draft review", "DOCX"],
+            ["Release", "PDF"],
+        ],
+        caption="Output workflow.",
+        column_widths=[2.5, 2.5],
+    )
+    preview_figure = Figure(
+        image_path,
+        caption=Paragraph("Tiny sample image."),
+        width_inches=1.0,
+    )
+    preview_figure_second = Figure(
+        image_path,
+        caption=Paragraph("Second tiny sample image."),
+        width_inches=1.2,
+    )
 
     document = Document(
         "Pipeline Report",
@@ -186,14 +236,19 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
                 Paragraph(markup("Inline helpers also support **bold** and *italic* markup.")),
                 Paragraph(
                     "See ",
-                    TableReference("artifacts-table"),
+                    artifacts_table,
                     " and ",
-                    FigureReference("preview-figure"),
+                    preview_figure,
                     " for the generated outputs.",
                 ),
                 Paragraph(
                     "Repository status is tracked in ",
-                    Citation("pydocs-repository"),
+                    cite(repository_source),
+                    ".",
+                ),
+                Paragraph(
+                    "Registered bibliography entries can still be cited as ",
+                    cite("release-notes"),
                     ".",
                 ),
                 Subsection(
@@ -210,38 +265,10 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
                         ),
                     ),
                     NumberedList("Create the model", "Render the files"),
-                    Table(
-                        identifier="artifacts-table",
-                        headers=["Type", "Status"],
-                        rows=[
-                            ["DOCX", "generated"],
-                            ["PDF", "generated"],
-                        ],
-                        caption="Generated artifacts.",
-                        column_widths=[2.5, 2.5],
-                    ),
-                    Table(
-                        identifier="workflow-table",
-                        headers=["Step", "Target"],
-                        rows=[
-                            ["Draft review", "DOCX"],
-                            ["Release", "PDF"],
-                        ],
-                        caption="Output workflow.",
-                        column_widths=[2.5, 2.5],
-                    ),
-                    Figure(
-                        image_path,
-                        identifier="preview-figure",
-                        caption=Paragraph("Tiny sample image."),
-                        width_inches=1.0,
-                    ),
-                    Figure(
-                        image_path,
-                        identifier="preview-figure-second",
-                        caption=Paragraph("Second tiny sample image."),
-                        width_inches=1.2,
-                    ),
+                    artifacts_table,
+                    workflow_table,
+                    preview_figure,
+                    preview_figure_second,
                     TableList(),
                     FigureList(),
                 ),
@@ -250,16 +277,7 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
         ReferencesPage(),
         author="pytest",
         summary="Renderer integration test",
-        citations=[
-            CitationSource(
-                key="pydocs-repository",
-                organization="Gonie-Gonie",
-                title="pydocs",
-                publisher="GitHub repository",
-                year="2026",
-                url="https://github.com/Gonie-Gonie/pydocs",
-            )
-        ],
+        citations=[registered_source, unused_source],
     )
 
     docx_path = tmp_path / "report.docx"
@@ -286,11 +304,14 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert any("docscriptor" in text for text in paragraph_texts)
     assert any("See Table 1 and Figure 1 for the generated outputs." in text for text in paragraph_texts)
     assert any("Repository status is tracked in [1]." in text for text in paragraph_texts)
+    assert any("Registered bibliography entries can still be cited as [2]." in text for text in paragraph_texts)
     assert paragraph_texts.count("Table 1. Generated artifacts.") >= 2
     assert paragraph_texts.count("Table 2. Output workflow.") >= 2
     assert paragraph_texts.count("Figure 1. Tiny sample image.") >= 2
     assert paragraph_texts.count("Figure 2. Second tiny sample image.") >= 2
     assert any("https://github.com/Gonie-Gonie/pydocs" in text for text in paragraph_texts)
+    assert any("https://github.com/Gonie-Gonie/pydocs/releases" in text for text in paragraph_texts)
+    assert all("internal-draft" not in text.lower() for text in paragraph_texts)
     assert any("from docscriptor import Document" in text for text in paragraph_texts)
     assert any(paragraph.style.name == "List Bullet" for paragraph in word_document.paragraphs)
     assert any(paragraph.style.name == "List Number" for paragraph in word_document.paragraphs)
@@ -320,6 +341,7 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert "Export Steps" in pdf_text
     assert "See Table 1 and Figure 1 for the generated outputs." in pdf_text
     assert "Repository status is tracked in [1]." in pdf_text
+    assert "Registered bibliography entries can still be cited as [2]." in pdf_text
     assert pdf_text.count("Table 1. Generated artifacts.") >= 2
     assert pdf_text.count("Table 2. Output workflow.") >= 2
     assert pdf_text.count("Figure 1. Tiny sample image.") >= 2
@@ -328,6 +350,8 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert "List of Figures" in pdf_text
     assert "References" in pdf_text
     assert "https://github.com/Gonie-Gonie/pydocs" in pdf_text
+    assert "https://github.com/Gonie-Gonie/pydocs/releases" in pdf_text
+    assert "Internal Draft" not in pdf_text
     assert "Lists render into both DOCX and PDF." in pdf_text
     assert "from docscriptor import Document" in pdf_text
     assert "1\nLists render into both DOCX and PDF." not in pdf_text

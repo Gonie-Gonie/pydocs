@@ -15,8 +15,8 @@ The package now ships with a basic document object model and two renderers:
 
 - block objects such as `Document`, `Body`, `Chapter`, `Section`, `Subsection`, `Subsubsection`, `Paragraph`, `CodeBlock`, `Table`, and `Figure`
 - list objects such as `BulletList`, `NumberedList`, `TableList`, and `FigureList`
-- reference helpers such as `TableReference` and `FigureReference` for numbered captions
-- citation helpers such as `Citation`, `CitationSource`, and `ReferencesPage`
+- object references by reusing `Table` and `Figure` instances directly inside paragraphs
+- citation helpers such as `cite(...)`, `CitationSource`, `CitationLibrary`, and `ReferencesPage`
 - inline objects such as `Text`, `Strong`, `Emphasis`, `Code`, and `styled(...)`
 - a lightweight `markup(...)` helper for markdown-like inline bold, italic, and code formatting
 - render targets for `.docx` and `.pdf`
@@ -31,10 +31,10 @@ The intended workflow is:
 
 Instantiate structural nodes directly with classes such as `Document`, `Chapter`, `Section`, and `Paragraph`.
 That same rule applies to lists, so use `BulletList` and `NumberedList` directly instead of constructor-style wrapper functions.
-The remaining helper functions are reserved for places where they transform content, such as `styled(...)` and `markup(...)`.
+The remaining helper functions are reserved for places where they transform content, such as `styled(...)`, `markup(...)`, and `cite(...)`.
 The default theme uses Times New Roman for body copy and progressively stronger heading treatment for chapter and section levels.
-Captioned tables and figures are numbered automatically, can be cited from prose, and can be collected into generated lists.
-Bibliography data can be supplied with Python objects or as a BibTeX string, then rendered through inline citations and a generated references page.
+Captioned tables and figures are numbered automatically, can be cited from prose by reusing the same object instance, and can be collected into generated lists.
+Bibliography data can be supplied with Python objects or as a BibTeX string, then rendered through `cite(...)` and a generated references page that only includes cited sources.
 
 The core model in `docscriptor.model` is intentionally class-based so users can build their own abstractions on top.
 For example, a team can subclass `Paragraph`, `Section`, or `Document` to create house styles, reusable callouts, or report templates.
@@ -56,21 +56,42 @@ Example:
 
 ```python
 from docscriptor import (
-    FigureList,
-    FigureReference,
     Chapter,
     Document,
     CodeBlock,
     Figure,
+    FigureList,
     TableList,
-    TableReference,
+    CitationSource,
     Paragraph,
+    ReferencesPage,
     Section,
     Subsection,
     Subsubsection,
     Table,
+    cite,
     markup,
     styled,
+)
+
+metrics_table = Table(
+    headers=["Metric", "Value"],
+    rows=[
+        ["Latency", "14 ms"],
+        ["Success rate", "99.8%"],
+    ],
+    caption="Summary metrics.",
+)
+output_figure = Figure(
+    "example.png",
+    caption=Paragraph("Example output."),
+    width_inches=3.0,
+)
+repository_source = CitationSource(
+    "Experiment assets",
+    organization="Docscriptor",
+    year="2026",
+    url="https://github.com/Gonie-Gonie/pydocs",
 )
 
 report = Document(
@@ -87,22 +108,16 @@ report = Document(
             ),
             Paragraph(
                 "See ",
-                TableReference("metrics-table"),
+                metrics_table,
                 " and ",
-                FigureReference("output-figure"),
-                " for the exported assets.",
+                output_figure,
+                " for the exported assets. Repository metadata appears in ",
+                cite(repository_source),
+                ".",
             ),
             Subsection(
                 "Measurements",
-                Table(
-                    identifier="metrics-table",
-                    headers=["Metric", "Value"],
-                    rows=[
-                        ["Latency", "14 ms"],
-                        ["Success rate", "99.8%"],
-                    ],
-                    caption="Summary metrics.",
-                ),
+                metrics_table,
                 Subsubsection(
                     "Exports",
                     CodeBlock(
@@ -111,14 +126,10 @@ report = Document(
                     ),
                 ),
             ),
-            Figure(
-                "example.png",
-                identifier="output-figure",
-                caption=Paragraph("Example output."),
-                width_inches=3.0,
-            ),
+            output_figure,
             TableList(),
             FigureList(),
+            ReferencesPage(),
         ),
     ),
     author="Docscriptor",
