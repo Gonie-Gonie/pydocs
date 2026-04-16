@@ -10,6 +10,8 @@ from pypdf import PdfReader
 
 from docscriptor import (
     BulletList,
+    Citation,
+    CitationSource,
     Chapter,
     Code,
     CodeBlock,
@@ -21,6 +23,7 @@ from docscriptor import (
     NumberedList,
     Paragraph,
     ParagraphStyle,
+    ReferencesPage,
     Section,
     Strong,
     Subsection,
@@ -138,6 +141,26 @@ def test_public_api_prefers_classes_for_structural_nodes() -> None:
         assert not hasattr(docscriptor, removed_name)
 
 
+def test_bibtex_string_creates_citation_library() -> None:
+    document = Document(
+        "Bibliography Test",
+        Paragraph("Example"),
+        citations="""@misc{pydocs-repository,
+  title = {pydocs},
+  organization = {Gonie-Gonie},
+  year = {2026},
+  url = {https://github.com/Gonie-Gonie/pydocs},
+  note = {GitHub repository}
+}""",
+    )
+
+    entry = document.citations.resolve("pydocs-repository")
+    assert entry.title == "pydocs"
+    assert entry.organization == "Gonie-Gonie"
+    assert entry.url == "https://github.com/Gonie-Gonie/pydocs"
+    assert "GitHub repository" in entry.format_reference()
+
+
 def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     image_path = tmp_path / "sample.png"
     _write_sample_image(image_path)
@@ -167,6 +190,11 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
                     " and ",
                     FigureReference("preview-figure"),
                     " for the generated outputs.",
+                ),
+                Paragraph(
+                    "Repository status is tracked in ",
+                    Citation("pydocs-repository"),
+                    ".",
                 ),
                 Subsection(
                     "Artifacts",
@@ -219,8 +247,19 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
                 ),
             ),
         ),
+        ReferencesPage(),
         author="pytest",
         summary="Renderer integration test",
+        citations=[
+            CitationSource(
+                key="pydocs-repository",
+                organization="Gonie-Gonie",
+                title="pydocs",
+                publisher="GitHub repository",
+                year="2026",
+                url="https://github.com/Gonie-Gonie/pydocs",
+            )
+        ],
     )
 
     docx_path = tmp_path / "report.docx"
@@ -243,12 +282,15 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert "Export Steps" in paragraph_texts
     assert "List of Tables" in paragraph_texts
     assert "List of Figures" in paragraph_texts
+    assert "References" in paragraph_texts
     assert any("docscriptor" in text for text in paragraph_texts)
     assert any("See Table 1 and Figure 1 for the generated outputs." in text for text in paragraph_texts)
+    assert any("Repository status is tracked in [1]." in text for text in paragraph_texts)
     assert paragraph_texts.count("Table 1. Generated artifacts.") >= 2
     assert paragraph_texts.count("Table 2. Output workflow.") >= 2
     assert paragraph_texts.count("Figure 1. Tiny sample image.") >= 2
     assert paragraph_texts.count("Figure 2. Second tiny sample image.") >= 2
+    assert any("https://github.com/Gonie-Gonie/pydocs" in text for text in paragraph_texts)
     assert any("from docscriptor import Document" in text for text in paragraph_texts)
     assert any(paragraph.style.name == "List Bullet" for paragraph in word_document.paragraphs)
     assert any(paragraph.style.name == "List Number" for paragraph in word_document.paragraphs)
@@ -277,12 +319,15 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert "Artifacts" in pdf_text
     assert "Export Steps" in pdf_text
     assert "See Table 1 and Figure 1 for the generated outputs." in pdf_text
+    assert "Repository status is tracked in [1]." in pdf_text
     assert pdf_text.count("Table 1. Generated artifacts.") >= 2
     assert pdf_text.count("Table 2. Output workflow.") >= 2
     assert pdf_text.count("Figure 1. Tiny sample image.") >= 2
     assert pdf_text.count("Figure 2. Second tiny sample image.") >= 2
     assert "List of Tables" in pdf_text
     assert "List of Figures" in pdf_text
+    assert "References" in pdf_text
+    assert "https://github.com/Gonie-Gonie/pydocs" in pdf_text
     assert "Lists render into both DOCX and PDF." in pdf_text
     assert "from docscriptor import Document" in pdf_text
     assert "1\nLists render into both DOCX and PDF." not in pdf_text

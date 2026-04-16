@@ -13,11 +13,12 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.pdfbase import pdfmetrics
 from reportlab.platypus import Image as RLImage
-from reportlab.platypus import KeepTogether, ListFlowable, ListItem as RLListItem, Paragraph as RLParagraph, Preformatted, SimpleDocTemplate, Spacer, Table as RLTable, TableStyle
+from reportlab.platypus import KeepTogether, ListFlowable, ListItem as RLListItem, PageBreak, Paragraph as RLParagraph, Preformatted, SimpleDocTemplate, Spacer, Table as RLTable, TableStyle
 
 from docscriptor.model import (
     Body,
     BulletList,
+    Citation,
     CodeBlock,
     Document,
     Figure,
@@ -28,6 +29,7 @@ from docscriptor.model import (
     ParagraphStyle,
     PathLike,
     RenderIndex,
+    ReferencesPage,
     Section,
     Table,
     TableList,
@@ -139,6 +141,8 @@ class PdfRenderer:
             return self._render_list(block, theme, styles, render_index)
         if isinstance(block, CodeBlock):
             return self._render_code_block(block, theme, styles)
+        if isinstance(block, ReferencesPage):
+            return self._render_references_page(block.title, theme, styles, render_index)
         if isinstance(block, TableList):
             return self._render_caption_list(block.title, render_index.tables, theme, styles, render_index, theme.list_of_tables_title, theme.table_label)
         if isinstance(block, FigureList):
@@ -326,6 +330,8 @@ class PdfRenderer:
         if isinstance(fragment, FigureReference):
             label = fragment.prefix or theme.figure_label
             return f"{label} {render_index.resolve_figure(fragment.target)}"
+        if isinstance(fragment, Citation):
+            return f"[{render_index.citation_number(fragment.key)}]"
         return fragment.value
 
     def _caption_fragments(self, label: str, number: int | None, caption: Paragraph) -> list[Text]:
@@ -366,4 +372,39 @@ class PdfRenderer:
             )
         if entries:
             story.append(Spacer(1, 6))
+        return story
+
+    def _render_references_page(
+        self,
+        title: list[Text] | None,
+        theme: Theme,
+        styles: object,
+        render_index: RenderIndex,
+    ) -> list[object]:
+        bold, italic = theme.heading_emphasis(1)
+        title_style = RLParagraphStyle(
+            "ReferencesPageTitle",
+            parent=styles["Heading1"],
+            fontName=self._resolve_font(theme.body_font_name, bold, italic),
+            fontSize=theme.heading_size(1),
+            leading=theme.heading_size(1) * 1.2,
+            spaceBefore=0,
+            spaceAfter=10,
+            alignment=ALIGNMENTS[theme.heading_alignment(1)],
+            textColor=colors.black,
+        )
+        entry_style = RLParagraphStyle(
+            "ReferenceEntry",
+            parent=styles["BodyText"],
+            fontName=self._resolve_font(theme.body_font_name, False, False),
+            fontSize=theme.body_font_size,
+            leading=theme.body_font_size * 1.35,
+            leftIndent=18,
+            firstLineIndent=-18,
+            spaceAfter=6,
+            textColor=colors.black,
+        )
+        story: list[object] = [PageBreak(), RLParagraph(self._inline_markup(title or [Text(theme.references_title)], theme, render_index), title_style)]
+        for entry in render_index.citations:
+            story.append(RLParagraph(escape(f"[{entry.number}] {entry.source.format_reference()}"), entry_style))
         return story

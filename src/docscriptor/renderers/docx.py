@@ -13,6 +13,7 @@ from docx.shared import Inches, Pt, RGBColor
 from docscriptor.model import (
     Body,
     BulletList,
+    Citation,
     CodeBlock,
     Document,
     Figure,
@@ -23,6 +24,7 @@ from docscriptor.model import (
     ParagraphStyle,
     PathLike,
     RenderIndex,
+    ReferencesPage,
     Section,
     Table,
     TableList,
@@ -113,6 +115,9 @@ class DocxRenderer:
             return
         if isinstance(block, CodeBlock):
             self._render_code_block(word_document, block, theme)
+            return
+        if isinstance(block, ReferencesPage):
+            self._render_references_page(word_document, block.title, theme, render_index)
             return
         if isinstance(block, TableList):
             self._render_caption_list(word_document, block.title, render_index.tables, theme, render_index, theme.list_of_tables_title, theme.table_label)
@@ -286,6 +291,10 @@ class DocxRenderer:
                 return fragment.plain_text()
             label = fragment.prefix or theme.figure_label
             return f"{label} {render_index.resolve_figure(fragment.target)}"
+        if isinstance(fragment, Citation):
+            if render_index is None:
+                return fragment.plain_text()
+            return f"[{render_index.citation_number(fragment.key)}]"
         return fragment.value
 
     def _caption_fragments(self, label: str, number: int | None, caption: Paragraph) -> list[Text]:
@@ -311,6 +320,27 @@ class DocxRenderer:
                 paragraph,
                 self._caption_fragments(label, entry.number, entry.block.caption),
                 default_size=theme.caption_font_size,
+                theme=theme,
+                render_index=render_index,
+            )
+
+    def _render_references_page(
+        self,
+        word_document: WordDocument,
+        title: list[Text] | None,
+        theme: Theme,
+        render_index: RenderIndex,
+    ) -> None:
+        word_document.add_page_break()
+        self._add_heading(word_document, title or [Text(theme.references_title)], level=1, theme=theme)
+        for entry in render_index.citations:
+            paragraph = word_document.add_paragraph()
+            paragraph.paragraph_format.left_indent = Inches(0.3)
+            paragraph.paragraph_format.first_line_indent = Inches(-0.3)
+            self._append_runs(
+                paragraph,
+                [Text(f"[{entry.number}] {entry.source.format_reference()}")],
+                default_size=theme.body_font_size,
                 theme=theme,
                 render_index=render_index,
             )

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
 from typing import Iterable, Sequence
 
 
@@ -84,6 +85,7 @@ class Theme:
     figure_label: str = "Figure"
     list_of_tables_title: str = "List of Tables"
     list_of_figures_title: str = "List of Figures"
+    references_title: str = "References"
 
     def heading_size(self, level: int) -> float:
         index = min(max(level - 1, 0), len(self.heading_sizes) - 1)
@@ -163,6 +165,19 @@ class FigureReference(Text):
     def plain_text(self) -> str:
         label = self.prefix or "Figure"
         return f"{label} ?"
+
+
+class Citation(Text):
+    """Inline citation rendered from a bibliography entry."""
+
+    __slots__ = ("key",)
+
+    def __init__(self, key: str, style: TextStyle | None = None) -> None:
+        super().__init__(value="", style=style or TextStyle())
+        self.key = key
+
+    def plain_text(self) -> str:
+        return "[?]"
 
 
 def styled(value: str, **style_values: object) -> Text:
@@ -272,6 +287,16 @@ class TableList(Block):
 @dataclass(slots=True, init=False)
 class FigureList(Block):
     """Generated list of numbered figures."""
+
+    title: list[Text] | None
+
+    def __init__(self, title: InlineInput | None = None) -> None:
+        self.title = coerce_inlines((title,)) if title is not None else None
+
+
+@dataclass(slots=True, init=False)
+class ReferencesPage(Block):
+    """Generated reference page for cited bibliography entries."""
 
     title: list[Text] | None
 
@@ -408,6 +433,88 @@ class Figure(Block):
 
 
 @dataclass(slots=True)
+class CitationSource:
+    """A bibliography entry defined with Python data."""
+
+    key: str
+    title: str
+    authors: tuple[str, ...] = ()
+    organization: str | None = None
+    publisher: str | None = None
+    year: str | None = None
+    url: str | None = None
+    note: str | None = None
+
+    def format_reference(self) -> str:
+        segments: list[str] = []
+        if self.authors:
+            segments.append(", ".join(self.authors))
+        elif self.organization:
+            segments.append(self.organization)
+        segments.append(self.title)
+        if self.publisher:
+            segments.append(self.publisher)
+        if self.year:
+            segments.append(self.year)
+        if self.url:
+            segments.append(self.url)
+        if self.note:
+            segments.append(self.note)
+        cleaned = [segment.strip().rstrip(".") for segment in segments if segment]
+        return ". ".join(cleaned) + "."
+
+
+@dataclass(slots=True)
+class CitationReferenceEntry:
+    """A numbered bibliography entry that was cited in the document."""
+
+    number: int
+    source: CitationSource
+
+
+@dataclass(slots=True)
+class CitationLibrary:
+    """Collection of bibliography entries addressable by citation key."""
+
+    entries: dict[str, CitationSource] = field(default_factory=dict)
+
+    def __init__(self, entries: Sequence[CitationSource] | None = None) -> None:
+        self.entries = {}
+        if entries is not None:
+            for entry in entries:
+                self.add(entry)
+
+    def add(self, entry: CitationSource) -> None:
+        if entry.key in self.entries:
+            raise DocscriptorError(f"Duplicate citation key: {entry.key!r}")
+        self.entries[entry.key] = entry
+
+    def resolve(self, key: str) -> CitationSource:
+        if key not in self.entries:
+            raise DocscriptorError(f"Unknown citation key: {key!r}")
+        return self.entries[key]
+
+    @classmethod
+    def from_bibtex(cls, source: str) -> CitationLibrary:
+        entries: list[CitationSource] = []
+        for key, fields in _parse_bibtex_entries(source):
+            authors = tuple(part.strip() for part in fields.get("author", "").split(" and ") if part.strip())
+            entries.append(
+                CitationSource(
+                    key=key,
+                    title=fields.get("title", key),
+                    authors=authors,
+                    organization=fields.get("organization") or fields.get("institution"),
+                    publisher=fields.get("publisher") or fields.get("journal") or fields.get("booktitle") or fields.get("howpublished"),
+                    year=fields.get("year"),
+                    url=fields.get("url"),
+                    note=fields.get("note"),
+                )
+            )
+        return cls(entries)
+
+
+@dataclass(slots=True)
 class CaptionEntry:
     """A numbered captioned block entry."""
 
@@ -425,6 +532,8 @@ class RenderIndex:
     figure_numbers: dict[int, int] = field(default_factory=dict)
     table_identifiers: dict[str, int] = field(default_factory=dict)
     figure_identifiers: dict[str, int] = field(default_factory=dict)
+    citations: list[CitationReferenceEntry] = field(default_factory=list)
+    citation_numbers: dict[str, int] = field(default_factory=dict)
 
     def table_number(self, table: Table) -> int | None:
         return self.table_numbers.get(id(table))
@@ -442,22 +551,45 @@ class RenderIndex:
             raise DocscriptorError(f"Unknown figure reference: {target!r}")
         return self.figure_identifiers[target]
 
+    def citation_number(self, key: str) -> int:
+        if key not in self.citation_numbers:
+            raise DocscriptorError(f"Unknown citation key: {key!r}")
+        return self.citation_numbers[key]
+
 
 def build_render_index(document: Document) -> RenderIndex:
     """Scan a document tree and assign numbers to captioned figures and tables."""
 
     render_index = RenderIndex()
-    _index_blocks(document.body.children, render_index)
+    _index_blocks(document.body.children, render_index, document.citations)
     return render_index
 
 
-def _index_blocks(blocks: Sequence[Block], render_index: RenderIndex) -> None:
+def _index_blocks(blocks: Sequence[Block], render_index: RenderIndex, citations: CitationLibrary) -> None:
     for block in blocks:
+        if isinstance(block, Paragraph):
+            _index_inlines(block.content, render_index, citations)
+            continue
+        if isinstance(block, (BulletList, NumberedList)):
+            for item in block.items:
+                _index_inlines(item.content, render_index, citations)
+            continue
         if isinstance(block, Section):
-            _index_blocks(block.children, render_index)
+            _index_inlines(block.title, render_index, citations)
+            _index_blocks(block.children, render_index, citations)
+            continue
+        if isinstance(block, (TableList, FigureList, ReferencesPage)):
+            if block.title is not None:
+                _index_inlines(block.title, render_index, citations)
             continue
         if isinstance(block, Table):
+            for header in block.headers:
+                _index_inlines(header.content, render_index, citations)
+            for row in block.rows:
+                for cell in row:
+                    _index_inlines(cell.content, render_index, citations)
             if block.caption is not None:
+                _index_inlines(block.caption.content, render_index, citations)
                 number = len(render_index.tables) + 1
                 render_index.tables.append(CaptionEntry(number=number, block=block))
                 render_index.table_numbers[id(block)] = number
@@ -468,6 +600,7 @@ def _index_blocks(blocks: Sequence[Block], render_index: RenderIndex) -> None:
             continue
         if isinstance(block, Figure):
             if block.caption is not None:
+                _index_inlines(block.caption.content, render_index, citations)
                 number = len(render_index.figures) + 1
                 render_index.figures.append(CaptionEntry(number=number, block=block))
                 render_index.figure_numbers[id(block)] = number
@@ -476,6 +609,96 @@ def _index_blocks(blocks: Sequence[Block], render_index: RenderIndex) -> None:
                         raise DocscriptorError(f"Duplicate figure identifier: {block.identifier!r}")
                     render_index.figure_identifiers[block.identifier] = number
             continue
+
+
+def _index_inlines(fragments: Sequence[Text], render_index: RenderIndex, citations: CitationLibrary) -> None:
+    for fragment in fragments:
+        if isinstance(fragment, Citation) and fragment.key not in render_index.citation_numbers:
+            source = citations.resolve(fragment.key)
+            number = len(render_index.citations) + 1
+            render_index.citations.append(CitationReferenceEntry(number=number, source=source))
+            render_index.citation_numbers[fragment.key] = number
+
+
+def _coerce_citation_library(value: CitationLibrary | Sequence[CitationSource] | str | None) -> CitationLibrary:
+    if value is None:
+        return CitationLibrary()
+    if isinstance(value, CitationLibrary):
+        return value
+    if isinstance(value, str):
+        return CitationLibrary.from_bibtex(value)
+    return CitationLibrary(value)
+
+
+def _parse_bibtex_entries(source: str) -> list[tuple[str, dict[str, str]]]:
+    entries: list[tuple[str, dict[str, str]]] = []
+    cursor = 0
+
+    while True:
+        match = re.search(r"@\w+\s*\{", source[cursor:])
+        if match is None:
+            break
+        entry_start = cursor + match.start()
+        body_start = entry_start + match.group(0).rfind("{") + 1
+        depth = 1
+        position = body_start
+        while position < len(source) and depth > 0:
+            char = source[position]
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+            position += 1
+        body = source[body_start : position - 1].strip()
+        cursor = position
+        if not body:
+            continue
+
+        key, _, fields_text = body.partition(",")
+        fields = _parse_bibtex_fields(fields_text)
+        entries.append((key.strip(), fields))
+
+    return entries
+
+
+def _parse_bibtex_fields(source: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for part in _split_bibtex_fields(source):
+        if "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        cleaned = value.strip().rstrip(",").strip()
+        if cleaned.startswith("{") and cleaned.endswith("}"):
+            cleaned = cleaned[1:-1]
+        elif cleaned.startswith('"') and cleaned.endswith('"'):
+            cleaned = cleaned[1:-1]
+        fields[key.strip().lower()] = cleaned.strip()
+    return fields
+
+
+def _split_bibtex_fields(source: str) -> list[str]:
+    parts: list[str] = []
+    depth = 0
+    current: list[str] = []
+
+    for char in source:
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth = max(depth - 1, 0)
+
+        if char == "," and depth == 0:
+            part = "".join(current).strip()
+            if part:
+                parts.append(part)
+            current = []
+            continue
+        current.append(char)
+
+    tail = "".join(current).strip()
+    if tail:
+        parts.append(tail)
+    return parts
 
 
 @dataclass(slots=True, init=False)
@@ -487,6 +710,7 @@ class Document:
     author: str | None
     summary: str | None
     theme: Theme
+    citations: CitationLibrary
 
     def __init__(
         self,
@@ -496,6 +720,7 @@ class Document:
         author: str | None = None,
         summary: str | None = None,
         theme: Theme | None = None,
+        citations: CitationLibrary | Sequence[CitationSource] | str | None = None,
     ) -> None:
         if body is not None and children:
             raise ValueError("Pass either body=... or positional blocks, not both")
@@ -505,6 +730,7 @@ class Document:
         self.author = author
         self.summary = summary
         self.theme = theme or Theme()
+        self.citations = _coerce_citation_library(citations)
 
     def save_docx(self, path: PathLike) -> Path:
         """Render the document into a DOCX file and return the output path."""

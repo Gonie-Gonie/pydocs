@@ -16,6 +16,7 @@ The package now ships with a basic document object model and two renderers:
 - block objects such as `Document`, `Body`, `Chapter`, `Section`, `Subsection`, `Subsubsection`, `Paragraph`, `CodeBlock`, `Table`, and `Figure`
 - list objects such as `BulletList`, `NumberedList`, `TableList`, and `FigureList`
 - reference helpers such as `TableReference` and `FigureReference` for numbered captions
+- citation helpers such as `Citation`, `CitationSource`, and `ReferencesPage`
 - inline objects such as `Text`, `Strong`, `Emphasis`, `Code`, and `styled(...)`
 - a lightweight `markup(...)` helper for markdown-like inline bold, italic, and code formatting
 - render targets for `.docx` and `.pdf`
@@ -33,6 +34,7 @@ That same rule applies to lists, so use `BulletList` and `NumberedList` directly
 The remaining helper functions are reserved for places where they transform content, such as `styled(...)` and `markup(...)`.
 The default theme uses Times New Roman for body copy and progressively stronger heading treatment for chapter and section levels.
 Captioned tables and figures are numbered automatically, can be cited from prose, and can be collected into generated lists.
+Bibliography data can be supplied with Python objects or as a BibTeX string, then rendered through inline citations and a generated references page.
 
 The core model in `docscriptor.model` is intentionally class-based so users can build their own abstractions on top.
 For example, a team can subclass `Paragraph`, `Section`, or `Document` to create house styles, reusable callouts, or report templates.

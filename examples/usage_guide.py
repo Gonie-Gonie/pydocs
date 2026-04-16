@@ -7,6 +7,8 @@ from pathlib import Path
 
 from docscriptor import (
     BulletList,
+    Citation,
+    CitationSource,
     Chapter,
     CodeBlock,
     Document,
@@ -16,6 +18,7 @@ from docscriptor import (
     NumberedList,
     Paragraph,
     ParagraphStyle,
+    ReferencesPage,
     Section,
     Strong,
     Subsection,
@@ -231,12 +234,28 @@ def build_usage_guide_document(output_dir: Path) -> Document:
                 Paragraph(
                     "Generated lists are derived from captioned figures and tables, so uncaptured objects stay out of the numbering sequence."
                 ),
+                Paragraph(
+                    "The project repository itself can be cited inline, as shown by ",
+                    Citation("pydocs-repository"),
+                    "."
+                ),
                 TableList(),
                 FigureList(),
             ),
         ),
+        ReferencesPage(),
         author="docscriptor examples",
         summary="Usage guide document",
+        citations=[
+            CitationSource(
+                key="pydocs-repository",
+                organization="Gonie-Gonie",
+                title="pydocs",
+                publisher="GitHub repository",
+                year="2026",
+                url="https://github.com/Gonie-Gonie/pydocs",
+            )
+        ],
     )
 
 
