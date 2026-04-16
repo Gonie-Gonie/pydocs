@@ -9,6 +9,153 @@ The long-term goal is to compose structured content in scripts, reuse templates 
 - make document generation programmable, testable, and reusable
 - support multiple export targets without committing to a TeX-centric workflow
 
+## Current Structure
+
+The package now ships with a basic document object model and two renderers:
+
+- block objects such as `Document`, `Body`, `Chapter`, `Section`, `Subsection`, `Subsubsection`, `Paragraph`, `CodeBlock`, `Table`, and `Figure`
+- list and generated blocks such as `BulletList`, `NumberedList`, `TableOfContents`, `TableList`, and `FigureList`
+- object references by reusing `Table` and `Figure` instances directly inside paragraphs
+- citation helpers such as `cite(...)`, `CitationSource`, `CitationLibrary`, and `ReferencesPage`
+- inline objects such as `Text`, `Bold`, `Italic`, `Monospace`, and `styled(...)`
+- a lightweight `markup(...)` helper for markdown-like inline bold, italic, and code formatting
+- render targets for `.docx` and `.pdf`
+
+## Authoring Model
+
+The intended workflow is:
+
+1. define a document tree with Python instances
+2. subclass the provided building blocks when you want reusable semantics
+3. render the same tree into one or more output formats
+
+Instantiate structural nodes directly with classes such as `Document`, `Chapter`, `Section`, and `Paragraph`.
+That same rule applies to lists, so use `BulletList` and `NumberedList` directly instead of constructor-style wrapper functions.
+The remaining helper functions are reserved for places where they transform content, such as `styled(...)`, `markup(...)`, and `cite(...)`.
+The default theme uses Times New Roman for body copy and progressively stronger heading treatment for chapter and section levels.
+Captioned tables and figures are numbered automatically, can be cited from prose by reusing the same object instance, and can be collected into generated lists.
+Bibliography data can be supplied with Python objects or as a BibTeX string, then rendered through `cite(...)` and a generated references page that only includes cited sources.
+Generated front matter such as a table of contents or lists of tables and figures is rendered with section-level headings so it reads like part of the document structure.
+
+The core model in `docscriptor.model` is intentionally class-based so users can build their own abstractions on top.
+For example, a team can subclass `Paragraph`, `Section`, or `Document` to create house styles, reusable callouts, or report templates.
+
+```python
+from docscriptor import Bold, Paragraph, ParagraphStyle
+
+
+class WarningParagraph(Paragraph):
+    def __init__(self, *content):
+        super().__init__(
+            Bold("Warning: "),
+            *content,
+            style=ParagraphStyle(space_after=14),
+        )
+```
+
+Example:
+
+```python
+from docscriptor import (
+    Chapter,
+    Document,
+    CodeBlock,
+    Figure,
+    FigureList,
+    TableList,
+    CitationSource,
+    Paragraph,
+    ReferencesPage,
+    Section,
+    Subsection,
+    Subsubsection,
+    Table,
+    TableOfContents,
+    Bold,
+    cite,
+    markup,
+    styled,
+)
+
+metrics_table = Table(
+    headers=["Metric", "Value"],
+    rows=[
+        ["Latency", "14 ms"],
+        ["Success rate", "99.8%"],
+    ],
+    caption="Summary metrics.",
+)
+output_figure = Figure(
+    "example.png",
+    caption=Paragraph("Example output."),
+    width_inches=3.0,
+)
+repository_source = CitationSource(
+    "Experiment assets",
+    organization="Docscriptor",
+    year="2026",
+    url="https://github.com/Gonie-Gonie/pydocs",
+)
+
+report = Document(
+    "Experiment Report",
+    Chapter(
+        "Analysis",
+        Section(
+            "Overview",
+            Paragraph(
+                "This document was written in Python with ",
+                styled("custom emphasis", bold=True),
+                " and ",
+                markup("**lightweight** *markup* support."),
+            ),
+            Paragraph(
+                "See ",
+                metrics_table,
+                " and ",
+                output_figure,
+                " for the exported assets. Repository metadata appears in ",
+                cite(repository_source),
+                ".",
+            ),
+            Subsection(
+                "Measurements",
+                metrics_table,
+                Subsubsection(
+                    "Exports",
+                    CodeBlock(
+                        "report.save_docx('artifacts/report.docx')\nreport.save_pdf('artifacts/report.pdf')",
+                        language="python",
+                    ),
+                ),
+            ),
+            output_figure,
+            TableOfContents(),
+            Paragraph(Bold("Rendered inline labels remain easy to spot.")),
+            TableList(),
+            FigureList(),
+            ReferencesPage(),
+        ),
+    ),
+    author="Docscriptor",
+)
+```
+
+## Example Script
+
+The repository also includes a runnable usage-guide script that documents how to use docscriptor while exercising sections, inline styling, lists, tables, and code blocks:
+
+```powershell
+python -m examples.usage_guide
+```
+
+By default it writes these files under `artifacts/usage-guide/`:
+
+- `docscriptor-usage-guide.docx`
+- `docscriptor-usage-guide.pdf`
+
+This example is also covered by automated tests so the generated outputs stay exercised continuously.
+
 ## Development
 
 Assuming Python 3.14 is already installed on the machine, run the repository setup helper:
@@ -18,8 +165,16 @@ Assuming Python 3.14 is already installed on the machine, run the repository set
 ```
 
 If you prefer to run the PowerShell script directly, use a one-off execution policy bypass for the current invocation:
+Assuming Python 3.14 is already installed on the machine, run the repository setup helper:
 
 ```powershell
+.\scripts\setup-repo.cmd
+```
+
+If you prefer to run the PowerShell script directly, use a one-off execution policy bypass for the current invocation:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-repo.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\setup-repo.ps1
 ```
 
@@ -39,6 +194,7 @@ To activate the virtual environment manually after setup:
 ## VS Code
 
 This repository commits workspace settings for VS Code.
+After running `.\scripts\setup-repo.cmd`, opening the folder in VS Code should pick `.venv` as the default interpreter and enable pytest discovery for the `tests` folder.
 After running `.\scripts\setup-repo.cmd`, opening the folder in VS Code should pick `.venv` as the default interpreter and enable pytest discovery for the `tests` folder.
 
 Run the test suite:

@@ -198,6 +198,7 @@ cython_debug/
 .build-temp/
 .setup-temp/
 .setup-temp-manual/
+artifacts/
 pytest-cache-files-*/
 
 # Cursor
