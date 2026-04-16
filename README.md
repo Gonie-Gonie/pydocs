@@ -17,7 +17,7 @@ The package now ships with a basic document object model and two renderers:
 - list objects such as `BulletList`, `NumberedList`, `TableList`, and `FigureList`
 - object references by reusing `Table` and `Figure` instances directly inside paragraphs
 - citation helpers such as `cite(...)`, `CitationSource`, `CitationLibrary`, and `ReferencesPage`
-- inline objects such as `Text`, `Strong`, `Emphasis`, `Code`, and `styled(...)`
+- inline objects such as `Text`, `Bold`, `Italic`, `Monospace`, and `styled(...)`
 - a lightweight `markup(...)` helper for markdown-like inline bold, italic, and code formatting
 - render targets for `.docx` and `.pdf`
 
@@ -40,13 +40,13 @@ The core model in `docscriptor.model` is intentionally class-based so users can 
 For example, a team can subclass `Paragraph`, `Section`, or `Document` to create house styles, reusable callouts, or report templates.
 
 ```python
-from docscriptor import Paragraph, ParagraphStyle, Strong
+from docscriptor import Bold, Paragraph, ParagraphStyle
 
 
 class WarningParagraph(Paragraph):
     def __init__(self, *content):
         super().__init__(
-            Strong("Warning: "),
+            Bold("Warning: "),
             *content,
             style=ParagraphStyle(space_after=14),
         )
@@ -69,6 +69,7 @@ from docscriptor import (
     Subsection,
     Subsubsection,
     Table,
+    Bold,
     cite,
     markup,
     styled,
@@ -127,6 +128,7 @@ report = Document(
                 ),
             ),
             output_figure,
+            Paragraph(Bold("Rendered inline labels remain easy to spot.")),
             TableList(),
             FigureList(),
             ReferencesPage(),

@@ -116,25 +116,30 @@ class Text:
         return self.value
 
 
-class Strong(Text):
+class Bold(Text):
     """Bold inline text."""
 
     def __init__(self, value: str, style: TextStyle | None = None) -> None:
         super().__init__(value=value, style=TextStyle(bold=True).merged(style))
 
 
-class Emphasis(Text):
+class Italic(Text):
     """Italic inline text."""
 
     def __init__(self, value: str, style: TextStyle | None = None) -> None:
         super().__init__(value=value, style=TextStyle(italic=True).merged(style))
 
 
-class Code(Text):
+class Monospace(Text):
     """Monospace inline text."""
 
     def __init__(self, value: str, style: TextStyle | None = None) -> None:
         super().__init__(value=value, style=TextStyle(font_name="Courier New").merged(style))
+
+
+Strong = Bold
+Emphasis = Italic
+Code = Monospace
 
 
 class _BlockReference(Text):

@@ -7,6 +7,7 @@ import struct
 import zlib
 
 from docscriptor import (
+    Bold,
     BulletList,
     CitationSource,
     Chapter,
@@ -14,12 +15,12 @@ from docscriptor import (
     Document,
     Figure,
     FigureList,
+    Monospace,
     NumberedList,
     Paragraph,
     ParagraphStyle,
     ReferencesPage,
     Section,
-    Strong,
     Subsection,
     Subsubsection,
     Table,
@@ -49,13 +50,13 @@ doc.save_docx("artifacts/hello.docx")
 doc.save_pdf("artifacts/hello.pdf")
 """
 
-CUSTOM_BLOCK_SNIPPET = """from docscriptor import Paragraph, ParagraphStyle, Strong
+CUSTOM_BLOCK_SNIPPET = """from docscriptor import Bold, Paragraph, ParagraphStyle
 
 
 class WarningParagraph(Paragraph):
     def __init__(self, *content):
         super().__init__(
-            Strong("Warning: "),
+            Bold("Warning: "),
             *content,
             style=ParagraphStyle(space_after=14),
         )
@@ -67,7 +68,7 @@ class NoteParagraph(Paragraph):
 
     def __init__(self, *content: object) -> None:
         super().__init__(
-            Strong("Note: "),
+            Bold("Note: "),
             *content,
             style=ParagraphStyle(space_after=14),
         )
@@ -130,7 +131,7 @@ def build_usage_guide_document(output_dir: Path) -> Document:
         rows=[
             ["Hierarchy", "Chapter, Section, Subsection, Subsubsection", "Document structure"],
             ["Blocks", "Paragraph, BulletList, NumberedList, CodeBlock, Table, Figure", "Content layout"],
-            ["Inline", "Text, Strong, Emphasis, Code", "Inline emphasis"],
+            ["Inline", "Text, Bold, Italic, Monospace", "Inline emphasis"],
             ["Helpers", "markup, styled, cite", "Authoring shortcuts"],
         ],
         caption="Core authoring primitives.",
@@ -172,13 +173,13 @@ def build_usage_guide_document(output_dir: Path) -> Document:
                 ),
                 Paragraph(
                     "Instantiate structural nodes directly with classes such as ",
-                    Strong("Document"),
+                    Bold("Document"),
                     ", ",
-                    Strong("Chapter"),
+                    Bold("Chapter"),
                     ", ",
-                    Strong("Section"),
+                    Bold("Section"),
                     ", and ",
-                    Strong("Paragraph"),
+                    Bold("Paragraph"),
                     ". Use helper functions only where they transform content, such as inline styling or markup parsing.",
                 ),
                 Paragraph(
@@ -221,13 +222,13 @@ def build_usage_guide_document(output_dir: Path) -> Document:
                     "Hierarchy Depth",
                     Paragraph(
                         "Use ",
-                        Strong("Chapter"),
+                        Bold("Chapter"),
                         " for the largest division, then step down through ",
-                        Strong("Section"),
+                        Bold("Section"),
                         ", ",
-                        Strong("Subsection"),
+                        Bold("Subsection"),
                         ", and ",
-                        Strong("Subsubsection"),
+                        Bold("Subsubsection"),
                         " as the document becomes more specific.",
                     ),
                     hierarchy_overview_figure,
@@ -280,11 +281,11 @@ def build_usage_guide_document(output_dir: Path) -> Document:
                 ),
                 Paragraph(
                     "For existing BibTeX data, pass a bibliography string to ",
-                    Strong("Document"),
+                    Bold("Document"),
                     " and call ",
-                    Strong("cite"),
+                    Bold("cite"),
                     "(",
-                    styled('"some-key"', font_name="Courier New"),
+                    Monospace('"some-key"'),
                     ") when you want key-based lookup.",
                 ),
                 TableList(),

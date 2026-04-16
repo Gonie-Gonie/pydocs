@@ -10,21 +10,21 @@ from docx.shared import RGBColor
 from pypdf import PdfReader
 
 from docscriptor import (
+    Bold,
     BulletList,
     CitationSource,
     Chapter,
-    Code,
     CodeBlock,
     Document,
-    Emphasis,
     Figure,
     FigureList,
+    Italic,
+    Monospace,
     NumberedList,
     Paragraph,
     ParagraphStyle,
     ReferencesPage,
     Section,
-    Strong,
     Subsection,
     Subsubsection,
     Table,
@@ -185,12 +185,18 @@ def test_public_api_prefers_classes_for_structural_nodes() -> None:
     assert hasattr(docscriptor, "TableList")
     assert hasattr(docscriptor, "FigureList")
     assert hasattr(docscriptor, "cite")
+    assert hasattr(docscriptor, "Bold")
+    assert hasattr(docscriptor, "Italic")
+    assert hasattr(docscriptor, "Monospace")
     assert hasattr(docscriptor, "Table")
     assert hasattr(docscriptor, "Figure")
     assert not hasattr(docscriptor, "ListBlock")
     assert not hasattr(docscriptor, "Citation")
     assert not hasattr(docscriptor, "TableReference")
     assert not hasattr(docscriptor, "FigureReference")
+    assert not hasattr(docscriptor, "Strong")
+    assert not hasattr(docscriptor, "Emphasis")
+    assert not hasattr(docscriptor, "Code")
 
     for removed_name in (
         "document",
@@ -291,11 +297,11 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
                 "Highlights",
                 HighlightedParagraph(
                     "The ",
-                    Strong("docscriptor"),
+                    Bold("docscriptor"),
                     " pipeline supports ",
-                    Emphasis("styled"),
+                    Italic("styled"),
                     " text, ",
-                    Code("code"),
+                    Monospace("code"),
                     ", and ",
                     styled("custom color", color="#0066AA", bold=True),
                     ".",

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from docscriptor.model import Code, Emphasis, Strong, Text, TextStyle
+from docscriptor.model import Bold, Italic, Monospace, Text, TextStyle
 
 
 def markup(source: str, *, style: TextStyle | None = None) -> list[Text]:
@@ -45,7 +45,7 @@ def _parse_markup(source: str, base_style: TextStyle) -> list[Text]:
         if source[cursor] == "`":
             end = source.find("`", cursor + 1)
             if end != -1:
-                fragments.append(Code(source[cursor + 1 : end], style=base_style))
+                fragments.append(Monospace(source[cursor + 1 : end], style=base_style))
                 cursor = end + 1
                 continue
 
@@ -70,12 +70,12 @@ def _parse_markup(source: str, base_style: TextStyle) -> list[Text]:
 def _rebase(fragments: list[Text], style: TextStyle) -> list[Text]:
     rebased: list[Text] = []
     for fragment in fragments:
-        if isinstance(fragment, Strong):
-            rebased.append(Strong(fragment.value, style=style.merged(fragment.style)))
-        elif isinstance(fragment, Emphasis):
-            rebased.append(Emphasis(fragment.value, style=style.merged(fragment.style)))
-        elif isinstance(fragment, Code):
-            rebased.append(Code(fragment.value, style=style.merged(fragment.style)))
+        if isinstance(fragment, Bold):
+            rebased.append(Bold(fragment.value, style=style.merged(fragment.style)))
+        elif isinstance(fragment, Italic):
+            rebased.append(Italic(fragment.value, style=style.merged(fragment.style)))
+        elif isinstance(fragment, Monospace):
+            rebased.append(Monospace(fragment.value, style=style.merged(fragment.style)))
         else:
             rebased.append(Text(fragment.value, style=style.merged(fragment.style)))
     return rebased
