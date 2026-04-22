@@ -7,6 +7,8 @@ from pathlib import Path
 import re
 from typing import Iterable, Sequence
 
+from docscriptor.equations import equation_plain_text
+
 
 PathLike = str | Path
 
@@ -85,9 +87,20 @@ class Theme:
     figure_label: str = "Figure"
     list_of_tables_title: str = "List of Tables"
     list_of_figures_title: str = "List of Figures"
+    comments_title: str = "Comments"
     references_title: str = "References"
     contents_title: str = "Contents"
     generated_section_level: int = 2
+    show_page_numbers: bool = False
+    page_number_alignment: str = "center"
+    page_number_format: str = "{page}"
+    page_number_font_size: float = 9.0
+
+    def __post_init__(self) -> None:
+        if self.page_number_alignment not in {"left", "center", "right"}:
+            raise ValueError(f"Unsupported page number alignment: {self.page_number_alignment!r}")
+        if "{page}" not in self.page_number_format:
+            raise ValueError("page_number_format must contain a '{page}' placeholder")
 
     def heading_size(self, level: int) -> float:
         index = min(max(level - 1, 0), len(self.heading_sizes) - 1)
@@ -105,6 +118,9 @@ class Theme:
 
     def heading_alignment(self, level: int) -> str:
         return "center" if level == 1 else "left"
+
+    def format_page_number(self, page_number: int) -> str:
+        return self.page_number_format.format(page=page_number)
 
 
 @dataclass(slots=True)
@@ -175,6 +191,56 @@ def cite(target: CitationSource | str, *, style: TextStyle | None = None) -> Cit
     """Create an inline citation for a bibliography entry or registered key."""
 
     return Citation(target, style=style)
+
+
+class Comment(Text):
+    """Inline text annotated with a numbered comment."""
+
+    __slots__ = ("comment", "author", "initials")
+
+    def __init__(
+        self,
+        value: str,
+        *comment: InlineInput,
+        author: str | None = None,
+        initials: str | None = None,
+        style: TextStyle | None = None,
+    ) -> None:
+        super().__init__(value=value, style=style or TextStyle())
+        self.comment = coerce_inlines(comment)
+        self.author = author
+        self.initials = initials
+
+    def plain_text(self) -> str:
+        return f"{self.value}[?]"
+
+
+def comment(
+    value: str,
+    *note: InlineInput,
+    author: str | None = None,
+    initials: str | None = None,
+    style: TextStyle | None = None,
+) -> Comment:
+    """Create inline text with an attached numbered comment."""
+
+    return Comment(value, *note, author=author, initials=initials, style=style)
+
+
+class Math(Text):
+    """Inline math fragment written in lightweight LaTeX syntax."""
+
+    def __init__(self, value: str, style: TextStyle | None = None) -> None:
+        super().__init__(value=value, style=TextStyle().merged(style))
+
+    def plain_text(self) -> str:
+        return equation_plain_text(self.value)
+
+
+def math(value: str, *, style: TextStyle | None = None) -> Math:
+    """Create an inline math fragment from a LaTeX-like expression."""
+
+    return Math(value, style=style)
 
 
 def styled(value: str, **style_values: object) -> Text:
@@ -274,6 +340,17 @@ class CodeBlock(Block):
     style: ParagraphStyle = field(default_factory=lambda: ParagraphStyle(space_after=12.0))
 
 
+@dataclass(slots=True)
+class Equation(Block):
+    """A centered block equation written in lightweight LaTeX syntax."""
+
+    expression: str
+    style: ParagraphStyle = field(default_factory=lambda: ParagraphStyle(alignment="center", space_after=12.0))
+
+    def plain_text(self) -> str:
+        return equation_plain_text(self.expression)
+
+
 @dataclass(slots=True, init=False)
 class TableList(Block):
     """Generated list of numbered tables."""
@@ -297,6 +374,16 @@ class FigureList(Block):
 @dataclass(slots=True, init=False)
 class ReferencesPage(Block):
     """Generated reference page for cited bibliography entries."""
+
+    title: list[Text] | None
+
+    def __init__(self, title: InlineInput | None = None) -> None:
+        self.title = coerce_inlines((title,)) if title is not None else None
+
+
+@dataclass(slots=True, init=False)
+class CommentsPage(Block):
+    """Generated page for numbered comments encountered in the document."""
 
     title: list[Text] | None
 
@@ -504,6 +591,14 @@ class CitationReferenceEntry:
 
 
 @dataclass(slots=True)
+class CommentReferenceEntry:
+    """A numbered comment encountered in the document tree."""
+
+    number: int
+    comment: Comment
+
+
+@dataclass(slots=True)
 class HeadingEntry:
     """A heading included in the generated table of contents."""
 
@@ -574,6 +669,8 @@ class RenderIndex:
     citations: list[CitationReferenceEntry] = field(default_factory=list)
     citation_numbers: dict[str, int] = field(default_factory=dict)
     citation_source_numbers: dict[int, int] = field(default_factory=dict)
+    comments: list[CommentReferenceEntry] = field(default_factory=list)
+    comment_numbers: dict[int, int] = field(default_factory=dict)
     headings: list[HeadingEntry] = field(default_factory=list)
 
     def table_number(self, table: Table) -> int | None:
@@ -594,6 +691,11 @@ class RenderIndex:
             raise DocscriptorError(f"Unknown citation key: {target!r}")
         return self.citation_numbers[target]
 
+    def comment_number(self, target: Comment) -> int:
+        if id(target) not in self.comment_numbers:
+            raise DocscriptorError(f"Unknown comment target: {target.value!r}")
+        return self.comment_numbers[id(target)]
+
 
 def build_render_index(document: Document) -> RenderIndex:
     """Scan a document tree and assign numbers to captioned figures and tables."""
@@ -612,12 +714,14 @@ def _index_blocks(blocks: Sequence[Block], render_index: RenderIndex, citations:
             for item in block.items:
                 _index_inlines(item.content, render_index, citations)
             continue
+        if isinstance(block, Equation):
+            continue
         if isinstance(block, Section):
             _index_inlines(block.title, render_index, citations)
             render_index.headings.append(HeadingEntry(level=block.level, title=block.title))
             _index_blocks(block.children, render_index, citations)
             continue
-        if isinstance(block, (TableList, FigureList, ReferencesPage, TableOfContents)):
+        if isinstance(block, (TableList, FigureList, ReferencesPage, CommentsPage, TableOfContents)):
             if block.title is not None:
                 _index_inlines(block.title, render_index, citations)
             continue
@@ -644,26 +748,32 @@ def _index_blocks(blocks: Sequence[Block], render_index: RenderIndex, citations:
 
 def _index_inlines(fragments: Sequence[Text], render_index: RenderIndex, citations: CitationLibrary) -> None:
     for fragment in fragments:
-        if not isinstance(fragment, Citation):
+        if isinstance(fragment, Comment):
+            _index_inlines(fragment.comment, render_index, citations)
+            if id(fragment) in render_index.comment_numbers:
+                continue
+            number = len(render_index.comments) + 1
+            render_index.comments.append(CommentReferenceEntry(number=number, comment=fragment))
+            render_index.comment_numbers[id(fragment)] = number
             continue
+        if isinstance(fragment, Citation):
+            target = fragment.target
+            if isinstance(target, CitationSource):
+                if target.key is not None and target.key in render_index.citation_numbers:
+                    continue
+                if id(target) in render_index.citation_source_numbers:
+                    continue
+                source = target
+            else:
+                if target in render_index.citation_numbers:
+                    continue
+                source = citations.resolve(target)
 
-        target = fragment.target
-        if isinstance(target, CitationSource):
-            if target.key is not None and target.key in render_index.citation_numbers:
-                continue
-            if id(target) in render_index.citation_source_numbers:
-                continue
-            source = target
-        else:
-            if target in render_index.citation_numbers:
-                continue
-            source = citations.resolve(target)
-
-        number = len(render_index.citations) + 1
-        render_index.citations.append(CitationReferenceEntry(number=number, source=source))
-        render_index.citation_source_numbers[id(source)] = number
-        if source.key is not None:
-            render_index.citation_numbers[source.key] = number
+            number = len(render_index.citations) + 1
+            render_index.citations.append(CitationReferenceEntry(number=number, source=source))
+            render_index.citation_source_numbers[id(source)] = number
+            if source.key is not None:
+                render_index.citation_numbers[source.key] = number
 
 
 def _coerce_citation_library(value: CitationLibrary | Sequence[CitationSource] | str | None) -> CitationLibrary:

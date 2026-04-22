@@ -15,11 +15,14 @@ from docscriptor import (
     BulletList,
     CitationSource,
     Chapter,
+    CommentsPage,
     CodeBlock,
     Document,
+    Equation,
     Figure,
     FigureList,
     Italic,
+    Math,
     Monospace,
     NumberedList,
     Paragraph,
@@ -31,7 +34,10 @@ from docscriptor import (
     Table,
     TableOfContents,
     TableList,
+    Theme,
     cite,
+    comment,
+    math,
     markup,
     styled,
 )
@@ -168,6 +174,33 @@ def test_list_classes_create_block_instances() -> None:
     assert [item.plain_text() for item in ordered.items] == ["step one", "step two"]
 
 
+def test_comment_and_math_helpers_create_renderable_fragments() -> None:
+    inline_comment = comment("term", "Expanded note", author="pytest", initials="PT")
+    inline_math = math(r"\alpha^2 + \beta^2")
+    equation = Equation(r"\frac{1}{2}")
+
+    assert isinstance(inline_comment, docscriptor.Comment)
+    assert inline_comment.plain_text() == "term[?]"
+    assert inline_comment.author == "pytest"
+    assert inline_comment.initials == "PT"
+    assert isinstance(inline_math, Math)
+    assert inline_math.plain_text() == "α2 + β2"
+    assert equation.plain_text() == "(1)/(2)"
+
+
+def test_theme_validates_page_number_configuration() -> None:
+    theme = Theme(show_page_numbers=True, page_number_format="Page {page}", page_number_alignment="right")
+
+    assert theme.format_page_number(3) == "Page 3"
+
+    try:
+        Theme(page_number_format="Page")
+    except ValueError as exc:
+        assert "{page}" in str(exc)
+    else:
+        raise AssertionError("Expected page_number_format validation to fail")
+
+
 def test_heading_hierarchy_uses_latex_like_levels() -> None:
     chapter = Chapter(
         "Part I",
@@ -202,6 +235,10 @@ def test_public_api_prefers_classes_for_structural_nodes() -> None:
     assert hasattr(docscriptor, "Table")
     assert hasattr(docscriptor, "Figure")
     assert hasattr(docscriptor, "TableOfContents")
+    assert hasattr(docscriptor, "Comment")
+    assert hasattr(docscriptor, "CommentsPage")
+    assert hasattr(docscriptor, "Equation")
+    assert hasattr(docscriptor, "Math")
     assert not hasattr(docscriptor, "ListBlock")
     assert not hasattr(docscriptor, "Citation")
     assert not hasattr(docscriptor, "TableReference")
@@ -209,6 +246,8 @@ def test_public_api_prefers_classes_for_structural_nodes() -> None:
     assert not hasattr(docscriptor, "Strong")
     assert not hasattr(docscriptor, "Emphasis")
     assert not hasattr(docscriptor, "Code")
+    assert hasattr(docscriptor, "comment")
+    assert hasattr(docscriptor, "math")
 
     for removed_name in (
         "document",
@@ -308,6 +347,11 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
             "Summary",
             Section(
                 "Highlights",
+                Paragraph(
+                    "The review ",
+                    comment("note", "Check the generated outputs before release.", author="pytest", initials="PT"),
+                    " appears inline and is also exported to the comments page.",
+                ),
                 HighlightedParagraph(
                     "The ",
                     Bold("docscriptor"),
@@ -320,7 +364,12 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
                     ".",
                     style=ParagraphStyle(space_after=14),
                 ),
-                Paragraph(markup("Inline helpers also support **bold** and *italic* markup.")),
+                Paragraph(
+                    markup("Inline helpers also support **bold** and *italic* markup."),
+                    " Inline math such as ",
+                    math(r"\alpha^2 + \beta^2 = \gamma^2"),
+                    " is supported as well.",
+                ),
                 Paragraph(
                     "See ",
                     artifacts_table,
@@ -351,6 +400,7 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
                             language="python",
                         ),
                     ),
+                    Equation(r"\int_0^1 \alpha x^2 \, dx = \frac{\alpha}{3}"),
                     NumberedList("Create the model", "Render the files"),
                     artifacts_table,
                     workflow_table,
@@ -361,9 +411,11 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
                 ),
             ),
         ),
+        CommentsPage(),
         ReferencesPage(),
         author="pytest",
         summary="Renderer integration test",
+        theme=Theme(show_page_numbers=True, page_number_format="Page {page}", page_number_alignment="center"),
         citations=[registered_source, unused_source],
     )
 
@@ -386,15 +438,20 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert "Artifacts" in paragraph_texts
     assert "Export Steps" in paragraph_texts
     assert "Contents" in paragraph_texts
+    assert "Comments" in paragraph_texts
     assert "List of Tables" in paragraph_texts
     assert "List of Figures" in paragraph_texts
     assert "References" in paragraph_texts
+    assert any("The review note[1] appears inline" in text for text in paragraph_texts)
     assert any("docscriptor" in text for text in paragraph_texts)
     assert any(text == "Summary" for text in paragraph_texts)
     assert any(text == "Highlights" for text in paragraph_texts)
     assert any("See Table 1 and Figure 1 for the generated outputs." in text for text in paragraph_texts)
     assert any("Repository status is tracked in [1]." in text for text in paragraph_texts)
     assert any("Registered bibliography entries can still be cited as [2]." in text for text in paragraph_texts)
+    assert any("Inline math such as" in text and "2 + " in text and " = " in text for text in paragraph_texts)
+    assert any("dx = (" in text and ")/(3)" in text for text in paragraph_texts)
+    assert any("[1] Check the generated outputs before release." in text for text in paragraph_texts)
     assert paragraph_texts.count("Table 1. Generated artifacts.") >= 2
     assert paragraph_texts.count("Table 2. Output workflow.") >= 2
     assert paragraph_texts.count("Figure 1. Tiny sample image.") >= 2
@@ -423,10 +480,26 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert word_document.styles["Heading 2"].font.color.rgb == RGBColor(0, 0, 0)
     assert word_document.styles["Heading 3"].font.color.rgb == RGBColor(0, 0, 0)
     assert word_document.styles["Heading 4"].font.color.rgb == RGBColor(0, 0, 0)
-    heading_styles = {paragraph.text: paragraph.style.name for paragraph in word_document.paragraphs if paragraph.text in {"List of Tables", "List of Figures", "References"}}
+    heading_styles = {paragraph.text: paragraph.style.name for paragraph in word_document.paragraphs if paragraph.text in {"Comments", "List of Tables", "List of Figures", "References"}}
+    assert heading_styles["Comments"] == "Heading 2"
     assert heading_styles["List of Tables"] == "Heading 2"
     assert heading_styles["List of Figures"] == "Heading 2"
     assert heading_styles["References"] == "Heading 2"
+    assert len(word_document.comments) == 1
+    assert "Check the generated outputs before release." in "\n".join(
+        paragraph.text
+        for comment_item in word_document.comments
+        for paragraph in comment_item.paragraphs
+    )
+    footer_xml = word_document.sections[0].footer.paragraphs[0]._p.xml
+    assert 'w:instr="PAGE"' in footer_xml
+    assert word_document.sections[0].footer.paragraphs[0].text.startswith("Page ")
+    inline_math_paragraph = next(paragraph for paragraph in word_document.paragraphs if "Inline math such as" in paragraph.text)
+    assert any(run.text == "2" and run.font.superscript for run in inline_math_paragraph.runs)
+    equation_paragraph = next(paragraph for paragraph in word_document.paragraphs if "dx = (" in paragraph.text and ")/(3)" in paragraph.text)
+    assert any(run.text == "2" and run.font.superscript for run in equation_paragraph.runs)
+    assert any(run.text == "0" and run.font.subscript for run in equation_paragraph.runs)
+    assert any(run.text == "1" and run.font.superscript for run in equation_paragraph.runs)
 
     pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf_path.read_bytes())).pages)
     assert "Pipeline Report" in pdf_text
@@ -435,9 +508,14 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert "Artifacts" in pdf_text
     assert "Export Steps" in pdf_text
     assert "Contents" in pdf_text
+    assert "Comments" in pdf_text
+    assert "The review note[1] appears inline and is also exported to the comments page." in pdf_text
     assert "See Table 1 and Figure 1 for the generated outputs." in pdf_text
     assert "Repository status is tracked in [1]." in pdf_text
     assert "Registered bibliography entries can still be cited as [2]." in pdf_text
+    assert "Inline math such as" in pdf_text
+    assert "dx = (" in pdf_text
+    assert "[1] Check the generated outputs before release." in pdf_text
     assert pdf_text.count("Table 1. Generated artifacts.") >= 2
     assert pdf_text.count("Table 2. Output workflow.") >= 2
     assert pdf_text.count("Figure 1. Tiny sample image.") >= 2
@@ -454,15 +532,24 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert "1\nCreate the model" in pdf_text
     assert _pdf_image_draw_count(pdf_path) == 2
     pdf_fonts = _pdf_font_names(pdf_path)
-    assert "/Times-Roman" in pdf_fonts
-    assert "/Times-Bold" in pdf_fonts
-    assert pdf_fonts & {"/Times-BoldItalic", "/Times-Italic"}
+    assert any(font == "/Times-Roman" or "TimesNewRomanPSMT" in font for font in pdf_fonts)
+    assert any(font == "/Times-Bold" or "TimesNewRomanPS-Bold" in font for font in pdf_fonts)
+    assert any(
+        font in {"/Times-BoldItalic", "/Times-Italic"}
+        or "TimesNewRomanPS-BoldItalic" in font
+        or "TimesNewRomanPS-Italic" in font
+        for font in pdf_fonts
+    )
+    assert any(font.startswith("/Courier") or "CourierNewPS" in font for font in pdf_fonts)
     pdf_content = _pdf_content_bytes(pdf_path)
+    assert b"Page 1" in pdf_content
     assert b"18 Tf" in pdf_content
     assert b"15 Tf" in pdf_content
     assert b"13 Tf" in pdf_content
     assert b"11.5 Tf" in pdf_content
+    assert b"Comments" in pdf_content
     assert b"15 Tf" in _pdf_text_context(pdf_path, "List of Tables")
     assert b"15 Tf" in _pdf_text_context(pdf_path, "List of Figures")
+    assert b"15 Tf" in _pdf_text_context(pdf_path, "Comments")
     assert b"15 Tf" in _pdf_text_context(pdf_path, "References")
     assert b"15 Tf" in _pdf_text_context(pdf_path, "Contents")

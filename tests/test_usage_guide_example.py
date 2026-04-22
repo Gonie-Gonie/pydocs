@@ -103,6 +103,7 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert "Text, Style, and Theme" in paragraph_texts
     assert "Citations, Helpers, and Errors" in paragraph_texts
     assert "Public Methods" in paragraph_texts
+    assert "Comments" in paragraph_texts
     assert "Contents" in paragraph_texts
     assert "List of Tables" in paragraph_texts
     assert "List of Figures" in paragraph_texts
@@ -117,15 +118,20 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert any("every stable name exported from docscriptor" in text for text in paragraph_texts)
     assert any("__version__ exposes the package version string" in text for text in paragraph_texts)
     assert any("Body," in text for text in paragraph_texts)
+    assert any("Portable comments such as review note[1]" in text for text in paragraph_texts)
+    assert any("inline math such as" in text and "2 + " in text and " = " in text for text in paragraph_texts)
+    assert any("dx = (" in text and ")/(3)" in text for text in paragraph_texts)
+    assert 'w:instr="PAGE"' in word_document.sections[0].footer.paragraphs[0]._p.xml
+    assert word_document.sections[0].footer.paragraphs[0].text.startswith("Page ")
     assert any(paragraph.style.name == "List Bullet" for paragraph in word_document.paragraphs)
     assert any(paragraph.style.name == "List Number" for paragraph in word_document.paragraphs)
     assert len(word_document.inline_shapes) == 2
     assert len(word_document.tables) == 8
-    assert word_document.tables[0].cell(2, 1).text == "Paragraph, BulletList, NumberedList, CodeBlock, Table, Figure"
+    assert word_document.tables[0].cell(2, 1).text == "Paragraph, BulletList, NumberedList, CodeBlock, Equation, Table, Figure"
     assert word_document.tables[1].cell(1, 0).text == "Editable review"
     assert word_document.tables[1].cell(2, 1).text == "PDF"
     assert word_document.tables[2].cell(1, 0).text == "Document"
-    assert word_document.tables[6].cell(6, 0).text == "__version__"
+    assert word_document.tables[6].cell(7, 0).text == "__version__"
     assert word_document.tables[7].cell(1, 0).text == "Document.save_docx(path)"
     assert paragraph_texts.count("Table 1. Core authoring primitives.") >= 2
     assert paragraph_texts.count("Table 2. Rendering outputs by goal.") >= 2
@@ -138,7 +144,8 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert paragraph_texts.index("List of Tables") < paragraph_texts.index("List of Figures")
     assert paragraph_texts.index("List of Figures") < paragraph_texts.index("Contents")
     assert paragraph_texts.index("Contents") < paragraph_texts.index("Getting Started")
-    heading_styles = {paragraph.text: paragraph.style.name for paragraph in word_document.paragraphs if paragraph.text in {"List of Tables", "List of Figures", "References"}}
+    heading_styles = {paragraph.text: paragraph.style.name for paragraph in word_document.paragraphs if paragraph.text in {"Comments", "List of Tables", "List of Figures", "References"}}
+    assert heading_styles["Comments"] == "Heading 2"
     assert heading_styles["List of Tables"] == "Heading 2"
     assert heading_styles["List of Figures"] == "Heading 2"
     assert heading_styles["References"] == "Heading 2"
@@ -153,6 +160,7 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
         "heading_size",
         "heading_emphasis",
         "heading_alignment",
+        "format_page_number",
         "format_reference",
         "resolve",
         "from_bibtex",
@@ -175,6 +183,7 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert "Text, Style, and Theme" in pdf_text
     assert "Citations, Helpers, and Errors" in pdf_text
     assert "Public Methods" in pdf_text
+    assert "Comments" in pdf_text
     assert "Contents" in pdf_text
     assert "List of Tables" in pdf_text
     assert "List of Figures" in pdf_text
@@ -196,6 +205,10 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert "every stable name exported from docscriptor" in normalized_pdf_text
     assert "__version__ exposes the package version string" in normalized_pdf_text
     assert "Body" in pdf_text
+    assert "Portable comments such as review note[1]" in pdf_text
+    assert "inline math such as" in pdf_text
+    assert "dx = (" in pdf_text
+    assert "Page 1" in pdf_text
     assert "https://github.com/Gonie-Gonie/pydocs" in pdf_text
     assert "Literate Programming" in pdf_text
     assert "https://doi.org/10.1093/comjnl/27.2.97" in pdf_text
@@ -206,6 +219,7 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert b"15 Tf" in _pdf_text_context(pdf_path, "Contents")
     assert b"15 Tf" in _pdf_text_context(pdf_path, "List of Tables")
     assert b"15 Tf" in _pdf_text_context(pdf_path, "List of Figures")
+    assert b"15 Tf" in _pdf_text_context(pdf_path, "Comments")
     assert b"15 Tf" in _pdf_text_context(pdf_path, "References")
     for public_name in docscriptor.__all__:
         assert public_name in compact_pdf_text
@@ -218,6 +232,7 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
         "heading_size",
         "heading_emphasis",
         "heading_alignment",
+        "format_page_number",
         "format_reference",
         "resolve",
         "from_bibtex",

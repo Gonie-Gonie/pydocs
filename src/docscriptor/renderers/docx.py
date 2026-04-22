@@ -10,16 +10,21 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 
+from docscriptor.equations import SUBSCRIPT, SUPERSCRIPT, parse_latex_segments
 from docscriptor.model import (
     _BlockReference,
     Body,
     BulletList,
     Citation,
+    Comment,
+    CommentsPage,
     CodeBlock,
     Document,
     DocscriptorError,
+    Equation,
     Figure,
     FigureList,
+    Math,
     NumberedList,
     Paragraph,
     ParagraphStyle,
@@ -76,6 +81,10 @@ class DocxRenderer:
         normal_style.font.name = document.theme.body_font_name
         normal_style.font.size = Pt(document.theme.body_font_size)
         normal_style.font.color.rgb = RGBColor(0, 0, 0)
+        footer_style = word_document.styles["Footer"]
+        footer_style.font.name = document.theme.body_font_name
+        footer_style.font.size = Pt(document.theme.page_number_font_size)
+        footer_style.font.color.rgb = RGBColor(0, 0, 0)
 
         self._configure_named_style(
             word_document,
@@ -95,6 +104,8 @@ class DocxRenderer:
                 bold=bold,
                 italic=italic,
             )
+        if document.theme.show_page_numbers:
+            self._add_page_number_footer(word_document, document.theme)
 
     def _render_block(self, word_document: WordDocument, block: object, theme: Theme, render_index: RenderIndex) -> None:
         if isinstance(block, Body):
@@ -109,13 +120,19 @@ class DocxRenderer:
         if isinstance(block, Paragraph):
             paragraph = word_document.add_paragraph()
             self._apply_paragraph_style(paragraph, block.style)
-            self._append_runs(paragraph, block.content, theme=theme, render_index=render_index)
+            self._append_runs(paragraph, block.content, theme=theme, render_index=render_index, word_document=word_document)
             return
         if isinstance(block, (BulletList, NumberedList)):
             self._render_list(word_document, block, theme, render_index)
             return
         if isinstance(block, CodeBlock):
             self._render_code_block(word_document, block, theme)
+            return
+        if isinstance(block, Equation):
+            self._render_equation(word_document, block, theme)
+            return
+        if isinstance(block, CommentsPage):
+            self._render_comments_page(word_document, block.title, theme, render_index)
             return
         if isinstance(block, ReferencesPage):
             self._render_references_page(word_document, block.title, theme, render_index)
@@ -146,7 +163,12 @@ class DocxRenderer:
             paragraph.alignment = ALIGNMENTS[theme.heading_alignment(level)]
             paragraph.paragraph_format.space_before = Pt(18 if level == 1 else 12)
             paragraph.paragraph_format.space_after = Pt(10 if level == 1 else 6)
-        self._append_runs(paragraph, title, default_size=theme.title_font_size if level == 0 else theme.heading_size(level))
+        self._append_runs(
+            paragraph,
+            title,
+            default_size=theme.title_font_size if level == 0 else theme.heading_size(level),
+            theme=theme,
+        )
 
     def _apply_paragraph_style(self, paragraph: object, style: ParagraphStyle) -> None:
         paragraph.alignment = ALIGNMENTS[style.alignment]
@@ -163,31 +185,85 @@ class DocxRenderer:
         *,
         theme: Theme | None = None,
         render_index: RenderIndex | None = None,
+        word_document: WordDocument | None = None,
     ) -> None:
         for fragment in fragments:
+            if isinstance(fragment, Comment):
+                self._append_comment_runs(
+                    paragraph,
+                    fragment,
+                    default_size=default_size,
+                    theme=theme,
+                    render_index=render_index,
+                    word_document=word_document,
+                )
+                continue
+            if isinstance(fragment, Math):
+                self._append_math_runs(paragraph, fragment, default_size=default_size)
+                continue
             run = paragraph.add_run(self._resolve_fragment_text(fragment, theme, render_index))
-            font = run.font
-            if fragment.style.font_name:
-                font.name = fragment.style.font_name
-            if fragment.style.font_size is not None:
-                font.size = Pt(fragment.style.font_size)
-            elif default_size is not None:
-                font.size = Pt(default_size)
-            if fragment.style.bold is not None:
-                font.bold = fragment.style.bold
-            if fragment.style.italic is not None:
-                font.italic = fragment.style.italic
-            if fragment.style.underline is not None:
-                font.underline = fragment.style.underline
-            if fragment.style.color is not None:
-                font.color.rgb = RGBColor.from_string(fragment.style.color)
+            self._apply_run_style(run, fragment.style, default_size=default_size)
+
+    def _apply_run_style(self, run: object, style: object, *, default_size: float | None = None) -> None:
+        font = run.font
+        if style.font_name:
+            font.name = style.font_name
+        if style.font_size is not None:
+            font.size = Pt(style.font_size)
+        elif default_size is not None:
+            font.size = Pt(default_size)
+        if style.bold is not None:
+            font.bold = style.bold
+        if style.italic is not None:
+            font.italic = style.italic
+        if style.underline is not None:
+            font.underline = style.underline
+        if style.color is not None:
+            font.color.rgb = RGBColor.from_string(style.color)
+
+    def _append_comment_runs(
+        self,
+        paragraph: object,
+        fragment: Comment,
+        *,
+        default_size: float | None,
+        theme: Theme | None,
+        render_index: RenderIndex | None,
+        word_document: WordDocument | None,
+    ) -> None:
+        visible_runs: list[object] = []
+        if fragment.value:
+            visible_run = paragraph.add_run(fragment.value)
+            self._apply_run_style(visible_run, fragment.style, default_size=default_size)
+            visible_runs.append(visible_run)
+
+        marker_run = paragraph.add_run(self._comment_marker(fragment, render_index))
+        self._apply_run_style(marker_run, fragment.style, default_size=max((default_size or 10.0) - 2, 8))
+        marker_run.font.superscript = True
+        anchor_runs = visible_runs or [marker_run]
+        if word_document is not None and render_index is not None:
+            word_document.add_comment(
+                anchor_runs,
+                text=self._flatten_fragments(fragment.comment, theme, render_index),
+                author=fragment.author or "",
+                initials=fragment.initials,
+            )
+
+    def _append_math_runs(self, paragraph: object, fragment: Math, *, default_size: float | None = None) -> None:
+        for segment in parse_latex_segments(fragment.value):
+            run = paragraph.add_run(segment.text)
+            self._apply_run_style(run, fragment.style, default_size=default_size)
+            if segment.vertical_align == SUPERSCRIPT:
+                run.font.superscript = True
+            elif segment.vertical_align == SUBSCRIPT:
+                run.font.subscript = True
 
     def _render_list(self, word_document: WordDocument, list_block: BulletList | NumberedList, theme: Theme, render_index: RenderIndex) -> None:
         style_name = "List Number" if isinstance(list_block, NumberedList) else "List Bullet"
         for item in list_block.items:
             paragraph = word_document.add_paragraph(style=style_name)
             self._apply_paragraph_style(paragraph, item.style)
-            self._append_runs(paragraph, item.content, theme=theme, render_index=render_index)
+            self._append_runs(paragraph, item.content, theme=theme, render_index=render_index, word_document=word_document)
 
     def _render_code_block(self, word_document: WordDocument, code_block: CodeBlock, theme: Theme) -> None:
         if code_block.language:
@@ -214,6 +290,17 @@ class DocxRenderer:
                 run.add_break()
             run.add_text(line)
 
+    def _render_equation(self, word_document: WordDocument, equation: Equation, theme: Theme) -> None:
+        paragraph = word_document.add_paragraph()
+        self._apply_paragraph_style(paragraph, equation.style)
+        if paragraph.alignment is None:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        self._append_math_runs(
+            paragraph,
+            Math(equation.expression),
+            default_size=max(theme.body_font_size + 1, 12),
+        )
+
     def _render_table(self, word_document: WordDocument, table_block: Table, theme: Theme, render_index: RenderIndex) -> None:
         row_count = len(table_block.rows) + 1
         table = word_document.add_table(rows=row_count, cols=len(table_block.headers))
@@ -221,14 +308,26 @@ class DocxRenderer:
 
         for column_index, header in enumerate(table_block.headers):
             paragraph = table.rows[0].cells[column_index].paragraphs[0]
-            self._append_runs(paragraph, header.content or [Text("")], theme=theme, render_index=render_index)
+            self._append_runs(
+                paragraph,
+                header.content or [Text("")],
+                theme=theme,
+                render_index=render_index,
+                word_document=word_document,
+            )
             for run in paragraph.runs:
                 run.bold = True
 
         for row_index, row in enumerate(table_block.rows, start=1):
             for column_index, cell in enumerate(row):
                 paragraph = table.rows[row_index].cells[column_index].paragraphs[0]
-                self._append_runs(paragraph, cell.content or [Text("")], theme=theme, render_index=render_index)
+                self._append_runs(
+                    paragraph,
+                    cell.content or [Text("")],
+                    theme=theme,
+                    render_index=render_index,
+                    word_document=word_document,
+                )
 
         if table_block.caption is not None:
             caption = word_document.add_paragraph()
@@ -239,6 +338,7 @@ class DocxRenderer:
                 default_size=theme.caption_font_size,
                 theme=theme,
                 render_index=render_index,
+                word_document=word_document,
             )
 
     def _render_figure(self, word_document: WordDocument, figure: Figure, theme: Theme, render_index: RenderIndex) -> None:
@@ -257,6 +357,7 @@ class DocxRenderer:
                 default_size=theme.caption_font_size,
                 theme=theme,
                 render_index=render_index,
+                word_document=word_document,
             )
 
     def _set_paragraph_shading(self, paragraph: object, fill: str) -> None:
@@ -293,6 +394,10 @@ class DocxRenderer:
             if render_index is None:
                 return fragment.plain_text()
             return f"[{render_index.citation_number(fragment.target)}]"
+        if isinstance(fragment, Comment):
+            return fragment.value
+        if isinstance(fragment, Math):
+            return fragment.plain_text()
         return fragment.value
 
     def _resolve_block_reference(self, target: Table | Figure, theme: Theme, render_index: RenderIndex) -> str:
@@ -332,6 +437,29 @@ class DocxRenderer:
                 default_size=theme.caption_font_size,
                 theme=theme,
                 render_index=render_index,
+                word_document=word_document,
+            )
+
+    def _render_comments_page(
+        self,
+        word_document: WordDocument,
+        title: list[Text] | None,
+        theme: Theme,
+        render_index: RenderIndex,
+    ) -> None:
+        word_document.add_page_break()
+        self._add_heading(word_document, title or [Text(theme.comments_title)], level=theme.generated_section_level, theme=theme)
+        for entry in render_index.comments:
+            paragraph = word_document.add_paragraph()
+            paragraph.paragraph_format.left_indent = Inches(0.3)
+            paragraph.paragraph_format.first_line_indent = Inches(-0.3)
+            self._append_runs(
+                paragraph,
+                [Text(f"[{entry.number}] ")] + entry.comment.comment,
+                default_size=theme.body_font_size,
+                theme=theme,
+                render_index=render_index,
+                word_document=word_document,
             )
 
     def _render_references_page(
@@ -353,6 +481,7 @@ class DocxRenderer:
                 default_size=theme.body_font_size,
                 theme=theme,
                 render_index=render_index,
+                word_document=word_document,
             )
 
     def _render_table_of_contents(
@@ -373,4 +502,47 @@ class DocxRenderer:
                 default_size=theme.body_font_size,
                 theme=theme,
                 render_index=render_index,
+                word_document=word_document,
             )
+
+    def _add_page_number_footer(self, word_document: WordDocument, theme: Theme) -> None:
+        for section in word_document.sections:
+            footer = section.footer
+            paragraph = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
+            paragraph.style = "Footer"
+            paragraph.alignment = ALIGNMENTS[theme.page_number_alignment]
+            for child in list(paragraph._p):
+                if child.tag != qn("w:pPr"):
+                    paragraph._p.remove(child)
+            parts = theme.page_number_format.split("{page}")
+            for index, part in enumerate(parts):
+                if part:
+                    run = paragraph.add_run(part)
+                    self._apply_run_style(run, Text(part).style, default_size=theme.page_number_font_size)
+                if index < len(parts) - 1:
+                    self._append_page_number_field(paragraph)
+
+    def _append_page_number_field(self, paragraph: object) -> None:
+        field = OxmlElement("w:fldSimple")
+        field.set(qn("w:instr"), "PAGE")
+        run = OxmlElement("w:r")
+        text = OxmlElement("w:t")
+        text.text = "1"
+        run.append(text)
+        field.append(run)
+        paragraph._p.append(field)
+
+    def _comment_marker(self, fragment: Comment, render_index: RenderIndex | None) -> str:
+        if render_index is None:
+            return "[?]"
+        return f"[{render_index.comment_number(fragment)}]"
+
+    def _flatten_fragments(self, fragments: list[Text], theme: Theme | None, render_index: RenderIndex | None) -> str:
+        parts: list[str] = []
+        for fragment in fragments:
+            if isinstance(fragment, Comment):
+                parts.append(fragment.value)
+                parts.append(self._comment_marker(fragment, render_index))
+                continue
+            parts.append(self._resolve_fragment_text(fragment, theme, render_index))
+        return "".join(parts)

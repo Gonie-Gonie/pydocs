@@ -11,8 +11,10 @@ from docscriptor import (
     BulletList,
     CitationSource,
     Chapter,
+    CommentsPage,
     CodeBlock,
     Document,
+    Equation,
     Figure,
     FigureList,
     Monospace,
@@ -26,7 +28,10 @@ from docscriptor import (
     Table,
     TableOfContents,
     TableList,
+    Theme,
     cite,
+    comment,
+    math,
     markup,
     styled,
 )
@@ -78,8 +83,10 @@ ADVANCED_API_SNIPPET = """from docscriptor import (
     Body,
     CitationLibrary,
     CitationSource,
+    CommentsPage,
     Document,
     DocscriptorError,
+    Equation,
     Paragraph,
     ParagraphStyle,
     TableOfContents,
@@ -88,12 +95,14 @@ ADVANCED_API_SNIPPET = """from docscriptor import (
     Theme,
     __version__,
     cite,
+    comment,
+    math,
     md,
     styled,
 )
 
 library = CitationLibrary([CitationSource("Usage Guide", key="guide", year="2026")])
-theme = Theme(contents_title="Contents")
+theme = Theme(contents_title="Contents", show_page_numbers=True, page_number_format="Page {page}")
 
 doc = Document(
     f"API Notes for {__version__}",
@@ -104,10 +113,16 @@ doc = Document(
             styled("styled text", color="#005A87"),
             " and ",
             *md("**markdown** helpers"),
+            " plus ",
+            comment("review notes", "Portable comments can also be collected on a comments page."),
+            " and ",
+            math(r"\\alpha^2 + \\beta^2 = \\gamma^2"),
             ".",
             style=ParagraphStyle(space_after=14),
         ),
+        Equation(r"\\int_0^1 x^2 \\, dx = \\frac{1}{3}"),
         Paragraph("Reference source ", cite("guide"), "."),
+        CommentsPage(),
     ),
     theme=theme,
     citations=library,
@@ -284,6 +299,11 @@ def _build_usage_guide_tables() -> UsageGuideTables:
             "Preformatted code snippet that keeps indentation intact in DOCX and PDF.",
         ),
         _api_reference_row(
+            "Equation",
+            "Equation(expression, style=ParagraphStyle(alignment='center', ...))",
+            "Centered block equation using lightweight LaTeX-style input shared by both renderers.",
+        ),
+        _api_reference_row(
             "Table",
             "Table(headers, rows, caption=None, column_widths=None, identifier=None)",
             "Grid-style text table. Captioned tables are numbered and added to TableList.",
@@ -309,6 +329,11 @@ def _build_usage_guide_tables() -> UsageGuideTables:
             "FigureList",
             "FigureList(title=None)",
             "Generated list of captioned figures with their numbers.",
+        ),
+        _api_reference_row(
+            "CommentsPage",
+            "CommentsPage(title=None)",
+            "Generated page collecting numbered comments encountered in the document.",
         ),
         _api_reference_row(
             "ReferencesPage",
@@ -338,6 +363,16 @@ def _build_usage_guide_tables() -> UsageGuideTables:
             "Inline code-style fragment using the monospace theme font.",
         ),
         _api_reference_row(
+            "Comment",
+            "Comment(value, *comment, author=None, initials=None, style=None)",
+            "Inline text with a numbered portable comment marker and optional DOCX comment metadata.",
+        ),
+        _api_reference_row(
+            "Math",
+            "Math(value, style=None)",
+            "Inline math fragment written in lightweight LaTeX syntax.",
+        ),
+        _api_reference_row(
             "TextStyle",
             "TextStyle(font_name=None, font_size=None, color=None, bold=None, italic=None, underline=None)",
             "Low-level inline style values used by Text and the helper functions.",
@@ -357,6 +392,11 @@ def _build_usage_guide_tables() -> UsageGuideTables:
             "styled(value, **style_values)",
             "Convenience helper that returns Text with a TextStyle created from keyword arguments.",
         ),
+        _api_reference_row(
+            "math",
+            "math(value, style=None)",
+            "Convenience helper that returns an inline Math fragment from a LaTeX-like expression.",
+        ),
     ]
     citation_rows = [
         _api_reference_row(
@@ -373,6 +413,11 @@ def _build_usage_guide_tables() -> UsageGuideTables:
             "cite",
             "cite(target, style=None)",
             "Create an inline citation from a CitationSource instance or a registered citation key.",
+        ),
+        _api_reference_row(
+            "comment",
+            "comment(value, *note, author=None, initials=None, style=None)",
+            "Create inline text with a numbered portable comment that can also populate CommentsPage.",
         ),
         _api_reference_row(
             "markup",
@@ -399,12 +444,15 @@ def _build_usage_guide_tables() -> UsageGuideTables:
         _method_reference_row("Document.save_docx(path)", "Render the current Document to a DOCX file and return the output path."),
         _method_reference_row("Document.save_pdf(path)", "Render the current Document to a PDF file and return the output path."),
         _method_reference_row("Text.plain_text()", "Return the raw text value for a single inline fragment."),
+        _method_reference_row("Math.plain_text()", "Return a readable plain-text representation of a lightweight LaTeX expression."),
         _method_reference_row("Paragraph.plain_text()", "Join paragraph content into plain text without styling metadata."),
+        _method_reference_row("Equation.plain_text()", "Return a readable plain-text representation of the block equation."),
         _method_reference_row("Section.plain_title()", "Return a plain-text version of a heading title."),
         _method_reference_row("TextStyle.merged(*others)", "Overlay later inline styles on top of earlier ones."),
         _method_reference_row("Theme.heading_size(level)", "Return the configured font size for a heading level."),
         _method_reference_row("Theme.heading_emphasis(level)", "Return the (bold, italic) emphasis tuple for a heading level."),
         _method_reference_row("Theme.heading_alignment(level)", "Return the alignment used for the given heading level."),
+        _method_reference_row("Theme.format_page_number(page_number)", "Render the configured footer page number string for a page."),
         _method_reference_row("CitationSource.format_reference()", "Format a bibliography entry for the generated references page."),
         _method_reference_row("CitationLibrary.add(entry)", "Register a keyed citation source inside the library."),
         _method_reference_row("CitationLibrary.resolve(key)", "Look up a citation source by key."),
@@ -416,9 +464,9 @@ def _build_usage_guide_tables() -> UsageGuideTables:
             headers=["Kind", "Examples", "Purpose"],
             rows=[
                 ["Hierarchy", "Chapter, Section, Subsection, Subsubsection", "Document structure"],
-                ["Blocks", "Paragraph, BulletList, NumberedList, CodeBlock, Table, Figure", "Content layout"],
-                ["Inline", "Text, Bold, Italic, Monospace", "Inline emphasis"],
-                ["Helpers", "markup, styled, cite", "Authoring shortcuts"],
+                ["Blocks", "Paragraph, BulletList, NumberedList, CodeBlock, Equation, Table, Figure", "Content layout"],
+                ["Inline", "Text, Bold, Italic, Monospace, Comment, Math", "Inline emphasis"],
+                ["Helpers", "markup, styled, cite, comment, math", "Authoring shortcuts"],
             ],
             caption="Core authoring primitives.",
             column_widths=[1.6, 3.1, 1.8],
@@ -683,6 +731,8 @@ def build_usage_guide_document(output_dir: Path) -> Document:
                     ", ",
                     Bold("CodeBlock"),
                     ", ",
+                    Bold("Equation"),
+                    ", ",
                     Bold("Table"),
                     ", and ",
                     Bold("Figure"),
@@ -692,6 +742,8 @@ def build_usage_guide_document(output_dir: Path) -> Document:
                     Bold("TableList"),
                     ", ",
                     Bold("FigureList"),
+                    ", ",
+                    Bold("CommentsPage"),
                     ", and ",
                     Bold("ReferencesPage"),
                     " stay synchronized with the same source tree.",
@@ -717,6 +769,10 @@ def build_usage_guide_document(output_dir: Path) -> Document:
                     Bold("Italic"),
                     ", ",
                     Bold("Monospace"),
+                    ", ",
+                    Bold("Comment"),
+                    ", ",
+                    Bold("Math"),
                     ", and ",
                     Bold("styled"),
                     ". Use ",
@@ -734,13 +790,27 @@ def build_usage_guide_document(output_dir: Path) -> Document:
                     Monospace("heading_emphasis"),
                     ", and ",
                     Monospace("heading_alignment"),
-                    " control renderer defaults."
+                    " control renderer defaults. The same theme also controls footer page numbers through ",
+                    Monospace("show_page_numbers"),
+                    ", ",
+                    Monospace("page_number_alignment"),
+                    ", and ",
+                    Monospace("page_number_format"),
+                    "."
                 ),
                 tables.inline_reference,
                 NoteParagraph(
                     "If you prefer markdown-like authoring over explicit fragments, ",
                     markup("`markup()` and `md()` produce the same kind of inline Text objects."),
                 ),
+                Paragraph(
+                    "Portable comments such as ",
+                    comment("review note", "DOCX output adds a native Word comment and both renderers can list it on a comments page."),
+                    " can travel with the document, and inline math such as ",
+                    math(r"\alpha^2 + \beta^2 = \gamma^2"),
+                    " stays readable without leaving Python."
+                ),
+                Equation(r"\int_0^1 \alpha x^2 \, dx = \frac{\alpha}{3}"),
             ),
             Section(
                 "Citations, Helpers, and Errors",
@@ -790,9 +860,11 @@ def build_usage_guide_document(output_dir: Path) -> Document:
                 ),
             ),
         ),
+        CommentsPage(),
         ReferencesPage(),
         author="docscriptor examples",
         summary="Usage guide document",
+        theme=Theme(show_page_numbers=True, page_number_format="Page {page}"),
         citations=RELATED_WORK_BIBTEX,
     )
     return document
