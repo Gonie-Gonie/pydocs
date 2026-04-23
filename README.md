@@ -14,6 +14,7 @@ The long-term goal is to compose structured content in scripts, reuse templates 
 The package now ships with a basic document object model and two renderers:
 
 - block objects such as `Document`, `Body`, `Chapter`, `Section`, `Subsection`, `Subsubsection`, `Paragraph`, `CodeBlock`, `Table`, and `Figure`
+- boxed layout blocks such as `Box(...)` for visually grouped content
 - list and generated blocks such as `BulletList`, `NumberedList`, `TableOfContents`, `TableList`, and `FigureList`
 - object references by reusing `Table` and `Figure` instances directly inside paragraphs
 - citation helpers such as `cite(...)`, `CitationSource`, `CitationLibrary`, and `ReferencesPage`
@@ -33,6 +34,7 @@ Instantiate structural nodes directly with classes such as `Document`, `Chapter`
 That same rule applies to lists, so use `BulletList` and `NumberedList` directly instead of constructor-style wrapper functions.
 The remaining helper functions are reserved for places where they transform content, such as `styled(...)`, `markup(...)`, and `cite(...)`.
 The default theme uses Times New Roman for body copy and progressively stronger heading treatment for chapter and section levels.
+Headings are numbered by default using labels such as `1`, `1.1`, and `1.1.1`, and both heading numbering and list marker styles can be customized with `HeadingNumbering(...)` and `ListStyle(...)`.
 Captioned tables and figures are numbered automatically, can be cited from prose by reusing the same object instance, and can be collected into generated lists.
 Bibliography data can be supplied with Python objects or as a BibTeX string, then rendered through `cite(...)` and a generated references page that only includes cited sources.
 Generated front matter such as a table of contents or lists of tables and figures is rendered with section-level headings so it reads like part of the document structure.

@@ -90,19 +90,19 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     docx_text = "\n".join(paragraph_texts + table_texts)
     compact_docx_text = "".join(docx_text.split())
     assert "Using docscriptor" in paragraph_texts
-    assert "Getting Started" in paragraph_texts
-    assert "Authoring Model" in paragraph_texts
-    assert "API Reference" in paragraph_texts
-    assert "Quick Start" in paragraph_texts
-    assert "Hierarchy Depth" in paragraph_texts
-    assert "When To Use CodeBlock" in paragraph_texts
-    assert "Reusable Abstractions" in paragraph_texts
-    assert "Generated Lists" in paragraph_texts
-    assert "Document and Structure" in paragraph_texts
-    assert "Blocks and Generated Pages" in paragraph_texts
-    assert "Text, Style, and Theme" in paragraph_texts
-    assert "Citations, Helpers, and Errors" in paragraph_texts
-    assert "Public Methods" in paragraph_texts
+    assert "1 Getting Started" in paragraph_texts
+    assert "1 Authoring Model" in paragraph_texts
+    assert "1 API Reference" in paragraph_texts
+    assert "1.1 Quick Start" in paragraph_texts
+    assert "1.1.1 Hierarchy Depth" in paragraph_texts
+    assert "1.1.1.1 When To Use CodeBlock" in paragraph_texts
+    assert "1.1 Reusable Abstractions" in paragraph_texts
+    assert "1.1 Generated Lists" in paragraph_texts
+    assert "1.1 Document and Structure" in paragraph_texts
+    assert "1.1 Blocks and Generated Pages" in paragraph_texts
+    assert "1.1 Text, Style, and Theme" in paragraph_texts
+    assert "1.1 Citations, Helpers, and Errors" in paragraph_texts
+    assert "1.1 Public Methods" in paragraph_texts
     assert "Comments" in paragraph_texts
     assert "Contents" in paragraph_texts
     assert "List of Tables" in paragraph_texts
@@ -121,16 +121,20 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert any("Portable comments such as review note[1]" in text for text in paragraph_texts)
     assert any("inline math such as" in text and "2 + " in text and " = " in text for text in paragraph_texts)
     assert any("dx = (" in text and ")/(3)" in text for text in paragraph_texts)
+    assert any(text == "1. Import the model objects you need." for text in paragraph_texts)
+    assert any(text == "• Show a complete example without losing indentation." for text in paragraph_texts)
     assert 'w:instr="PAGE"' in word_document.sections[0].footer.paragraphs[0]._p.xml
     assert word_document.sections[0].footer.paragraphs[0].text.startswith("Page ")
-    assert any(paragraph.style.name == "List Bullet" for paragraph in word_document.paragraphs)
-    assert any(paragraph.style.name == "List Number" for paragraph in word_document.paragraphs)
     assert len(word_document.inline_shapes) == 2
     assert len(word_document.tables) == 8
     assert word_document.tables[0].cell(2, 1).text == "Paragraph, BulletList, NumberedList, CodeBlock, Equation, Table, Figure"
     assert word_document.tables[1].cell(1, 0).text == "Editable review"
     assert word_document.tables[1].cell(2, 1).text == "PDF"
     assert word_document.tables[2].cell(1, 0).text == "Document"
+    assert word_document.tables[3].cell(5, 0).text == "Box"
+    assert word_document.tables[5].cell(9, 0).text == "BoxStyle"
+    assert word_document.tables[5].cell(10, 0).text == "HeadingNumbering"
+    assert word_document.tables[5].cell(11, 0).text == "ListStyle"
     assert word_document.tables[6].cell(7, 0).text == "__version__"
     assert word_document.tables[7].cell(1, 0).text == "Document.save_docx(path)"
     assert paragraph_texts.count("Table 1. Core authoring primitives.") >= 2
@@ -143,7 +147,7 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert word_document.styles["Normal"].font.name == "Times New Roman"
     assert paragraph_texts.index("List of Tables") < paragraph_texts.index("List of Figures")
     assert paragraph_texts.index("List of Figures") < paragraph_texts.index("Contents")
-    assert paragraph_texts.index("Contents") < paragraph_texts.index("Getting Started")
+    assert paragraph_texts.index("Contents") < paragraph_texts.index("1 Getting Started")
     heading_styles = {paragraph.text: paragraph.style.name for paragraph in word_document.paragraphs if paragraph.text in {"Comments", "List of Tables", "List of Figures", "References"}}
     assert heading_styles["Comments"] == "Heading 2"
     assert heading_styles["List of Tables"] == "Heading 2"
@@ -157,9 +161,13 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
         "plain_text",
         "plain_title",
         "merged",
+        "format_label",
+        "marker_for",
         "heading_size",
         "heading_emphasis",
         "heading_alignment",
+        "format_heading_label",
+        "list_style",
         "format_page_number",
         "format_reference",
         "resolve",
@@ -216,6 +224,13 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert pdf_text.index("List of Tables") < pdf_text.index("List of Figures")
     assert pdf_text.index("List of Figures") < pdf_text.index("Contents")
     assert pdf_text.index("Contents") < pdf_text.index("Getting Started")
+    assert "1 Getting Started" in pdf_text
+    assert "1.1 Quick Start" in pdf_text
+    assert "1.1.1 Hierarchy Depth" in pdf_text
+    assert "1.1.1.1 When To Use CodeBlock" in pdf_text
+    assert "HeadingNumbering" in pdf_text
+    assert "ListStyle" in pdf_text
+    assert "BoxStyle" in pdf_text
     assert b"15 Tf" in _pdf_text_context(pdf_path, "Contents")
     assert b"15 Tf" in _pdf_text_context(pdf_path, "List of Tables")
     assert b"15 Tf" in _pdf_text_context(pdf_path, "List of Figures")
@@ -229,9 +244,13 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
         "plain_text",
         "plain_title",
         "merged",
+        "format_label",
+        "marker_for",
         "heading_size",
         "heading_emphasis",
         "heading_alignment",
+        "format_heading_label",
+        "list_style",
         "format_page_number",
         "format_reference",
         "resolve",

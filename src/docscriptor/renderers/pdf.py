@@ -14,12 +14,13 @@ from reportlab.lib.units import inch
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Image as RLImage
-from reportlab.platypus import KeepTogether, ListFlowable, ListItem as RLListItem, PageBreak, Paragraph as RLParagraph, Preformatted, SimpleDocTemplate, Spacer, Table as RLTable, TableStyle
+from reportlab.platypus import KeepTogether, PageBreak, Paragraph as RLParagraph, Preformatted, SimpleDocTemplate, Spacer, Table as RLTable, TableStyle
 
 from docscriptor.equations import SUBSCRIPT, SUPERSCRIPT, parse_latex_segments
 from docscriptor.model import (
     _BlockReference,
     Body,
+    Box,
     BulletList,
     Citation,
     Comment,
@@ -182,7 +183,7 @@ class PdfRenderer:
             story = [
                 RLParagraph(
                     self._inline_markup(
-                        block.title,
+                        self._heading_fragments(block.title, render_index.heading_number(block)),
                         theme,
                         render_index,
                         base_font_name=title_style.fontName,
@@ -216,6 +217,8 @@ class PdfRenderer:
             return self._render_code_block(block, theme, styles)
         if isinstance(block, Equation):
             return self._render_equation(block, theme, styles)
+        if isinstance(block, Box):
+            return self._render_box(block, theme, styles, render_index)
         if isinstance(block, CommentsPage):
             return self._render_comments_page(block.title, theme, styles, render_index)
         if isinstance(block, ReferencesPage):
@@ -331,31 +334,103 @@ class PdfRenderer:
 
     def _render_list(self, block: BulletList | NumberedList, theme: Theme, styles: object, render_index: RenderIndex) -> list[object]:
         item_style = self._paragraph_style(ParagraphStyle(space_after=3), theme, styles["BodyText"])
-        list_items = [
-            RLListItem(
-                RLParagraph(
-                    self._inline_markup(
-                        item.content,
-                        theme,
-                        render_index,
-                        base_font_name=item_style.fontName,
-                        base_size=item_style.fontSize,
-                    ),
-                    item_style,
-                )
+        marker_style = RLParagraphStyle(
+            "ListMarker",
+            parent=item_style,
+            alignment=TA_RIGHT,
+            spaceAfter=3,
+        )
+        list_style = block.style or theme.list_style(ordered=isinstance(block, NumberedList))
+        marker_width = max(list_style.indent * inch, 0.35 * inch)
+        rows: list[list[object]] = []
+        for index, item in enumerate(block.items):
+            marker = list_style.marker_for(index)
+            marker_markup = escape(marker) if marker else "&nbsp;"
+            marker_paragraph = RLParagraph(marker_markup, marker_style)
+            content_paragraph = RLParagraph(
+                self._inline_markup(
+                    item.content,
+                    theme,
+                    render_index,
+                    base_font_name=item_style.fontName,
+                    base_size=item_style.fontSize,
+                ),
+                item_style,
             )
-            for item in block.items
+            rows.append([marker_paragraph, content_paragraph])
+        table = RLTable(rows, colWidths=[marker_width, None], hAlign="LEFT")
+        table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("TOPPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                    ("LEFTPADDING", (1, 0), (1, -1), max(list_style.marker_gap * inch, 4)),
+                ]
+            )
+        )
+        return [table, Spacer(1, 8)]
+
+    def _render_box(self, block: Box, theme: Theme, styles: object, render_index: RenderIndex) -> list[object]:
+        body_style = self._paragraph_style(ParagraphStyle(space_after=0), theme, styles["BodyText"])
+        rows: list[list[object]] = []
+        row_styles: list[tuple[str, tuple[int, int], tuple[int, int], object]] = []
+        if block.title is not None:
+            title_style = RLParagraphStyle(
+                "BoxTitle",
+                parent=body_style,
+                fontName=self._resolve_font(theme.body_font_name, True, False),
+                spaceAfter=6,
+            )
+            rows.append(
+                [
+                    RLParagraph(
+                        self._inline_markup(
+                            block.title,
+                            theme,
+                            render_index,
+                            base_font_name=title_style.fontName,
+                            base_size=title_style.fontSize,
+                            base_bold=True,
+                            base_italic=False,
+                        ),
+                        title_style,
+                    )
+                ]
+            )
+            if block.style.title_background_color is not None:
+                row_styles.append(
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (0, 0),
+                        colors.HexColor(f"#{block.style.title_background_color}"),
+                    )
+                )
+        for child in block.children:
+            for flowable in self._render_block(child, theme, styles, render_index):
+                if isinstance(flowable, KeepTogether):
+                    rows.extend([[nested]] for nested in flowable._content)
+                    continue
+                rows.append([flowable])
+        if not rows:
+            rows.append([Spacer(1, 1)])
+
+        table = RLTable(rows, hAlign="LEFT", repeatRows=0)
+        style_commands: list[tuple[str, tuple[int, int], tuple[int, int], object]] = [
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(f"#{block.style.background_color}")),
+            ("BOX", (0, 0), (-1, -1), block.style.border_width, colors.HexColor(f"#{block.style.border_color}")),
+            ("LEFTPADDING", (0, 0), (-1, -1), block.style.padding),
+            ("RIGHTPADDING", (0, 0), (-1, -1), block.style.padding),
+            ("TOPPADDING", (0, 0), (-1, -1), block.style.padding),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), block.style.padding),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ]
-        list_kwargs: dict[str, object] = {
-            "leftIndent": 18,
-        }
-        if isinstance(block, NumberedList):
-            list_kwargs["bulletType"] = "1"
-            list_kwargs["start"] = "1"
-        else:
-            list_kwargs["bulletType"] = "bullet"
-        flowable = ListFlowable(list_items, **list_kwargs)
-        return [flowable, Spacer(1, 8)]
+        style_commands.extend(row_styles)
+        table.setStyle(TableStyle(style_commands))
+        return [table, Spacer(1, block.style.space_after)]
 
     def _render_code_block(self, block: CodeBlock, theme: Theme, styles: object) -> list[object]:
         code_style = RLParagraphStyle(
@@ -470,6 +545,11 @@ class PdfRenderer:
             for fragment in fragments
         ]
         return "".join(parts) or "&nbsp;"
+
+    def _heading_fragments(self, title: list[Text], number_label: str | None) -> list[Text]:
+        if not number_label:
+            return title
+        return [Text(f"{number_label} ")] + title
 
     def _fragment_markup(
         self,
@@ -842,7 +922,7 @@ class PdfRenderer:
             story.append(
                 RLParagraph(
                     self._inline_markup(
-                        entry.title,
+                        self._heading_fragments(entry.title, entry.number),
                         theme,
                         render_index,
                         base_font_name=entry_style.fontName,

@@ -17,6 +17,17 @@ class DocscriptorError(Exception):
     """Raised when a document structure cannot be rendered."""
 
 
+COUNTER_FORMATS = {
+    "decimal",
+    "lower-alpha",
+    "upper-alpha",
+    "lower-roman",
+    "upper-roman",
+    "bullet",
+    "none",
+}
+
+
 def _normalize_color(value: str | None) -> str | None:
     if value is None:
         return None
@@ -25,6 +36,73 @@ def _normalize_color(value: str | None) -> str | None:
     if len(normalized) != 6 or any(char not in "0123456789ABCDEF" for char in normalized):
         raise ValueError(f"Expected a 6-digit hex color, got: {value!r}")
     return normalized
+
+
+def _normalize_counter_format(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized not in COUNTER_FORMATS:
+        raise ValueError(f"Unsupported counter format: {value!r}")
+    return normalized
+
+
+def _alpha_counter(value: int) -> str:
+    if value < 1:
+        raise ValueError("Alphabetic counters require values >= 1")
+
+    characters: list[str] = []
+    number = value
+    while number > 0:
+        number -= 1
+        characters.append(chr(ord("a") + (number % 26)))
+        number //= 26
+    return "".join(reversed(characters))
+
+
+def _roman_counter(value: int) -> str:
+    if value < 1:
+        raise ValueError("Roman numeral counters require values >= 1")
+
+    numerals = (
+        (1000, "M"),
+        (900, "CM"),
+        (500, "D"),
+        (400, "CD"),
+        (100, "C"),
+        (90, "XC"),
+        (50, "L"),
+        (40, "XL"),
+        (10, "X"),
+        (9, "IX"),
+        (5, "V"),
+        (4, "IV"),
+        (1, "I"),
+    )
+    remaining = value
+    parts: list[str] = []
+    for numeral_value, glyph in numerals:
+        while remaining >= numeral_value:
+            parts.append(glyph)
+            remaining -= numeral_value
+    return "".join(parts)
+
+
+def format_counter_value(value: int, counter_format: str, *, bullet: str = "•") -> str:
+    """Format an integer using a supported numbering style."""
+
+    normalized = _normalize_counter_format(counter_format)
+    if normalized == "decimal":
+        return str(value)
+    if normalized == "lower-alpha":
+        return _alpha_counter(value)
+    if normalized == "upper-alpha":
+        return _alpha_counter(value).upper()
+    if normalized == "lower-roman":
+        return _roman_counter(value).lower()
+    if normalized == "upper-roman":
+        return _roman_counter(value)
+    if normalized == "bullet":
+        return bullet
+    return ""
 
 
 @dataclass(slots=True)
@@ -74,6 +152,84 @@ class ParagraphStyle:
 
 
 @dataclass(slots=True)
+class HeadingNumbering:
+    """Configurable hierarchical numbering for authored headings."""
+
+    enabled: bool = True
+    formats: tuple[str, ...] = ("decimal", "decimal", "decimal", "decimal")
+    separator: str = "."
+    prefix: str = ""
+    suffix: str = ""
+
+    def __post_init__(self) -> None:
+        self.formats = tuple(_normalize_counter_format(value) for value in self.formats)
+        if not self.formats:
+            raise ValueError("HeadingNumbering.formats must not be empty")
+
+    def format_label(self, counters: Sequence[int]) -> str | None:
+        if not self.enabled:
+            return None
+
+        pieces = [
+            format_counter_value(value, self.formats[min(index, len(self.formats) - 1)])
+            for index, value in enumerate(counters)
+        ]
+        return f"{self.prefix}{self.separator.join(pieces)}{self.suffix}"
+
+
+@dataclass(slots=True)
+class ListStyle:
+    """Configurable marker formatting for bullet and ordered lists."""
+
+    marker_format: str = "decimal"
+    bullet: str = "•"
+    prefix: str = ""
+    suffix: str = "."
+    start: int = 1
+    indent: float = 0.25
+    marker_gap: float = 0.1
+
+    def __post_init__(self) -> None:
+        self.marker_format = _normalize_counter_format(self.marker_format)
+        if self.start < 1:
+            raise ValueError("ListStyle.start must be >= 1")
+        if self.indent < 0:
+            raise ValueError("ListStyle.indent must be >= 0")
+        if self.marker_gap < 0:
+            raise ValueError("ListStyle.marker_gap must be >= 0")
+
+    def marker_for(self, index: int) -> str:
+        if self.marker_format == "none":
+            return ""
+
+        marker_value = format_counter_value(index + self.start, self.marker_format, bullet=self.bullet)
+        return f"{self.prefix}{marker_value}{self.suffix}"
+
+
+@dataclass(slots=True)
+class BoxStyle:
+    """Shared box styling used by DOCX and PDF renderers."""
+
+    border_color: str = "B7C2D0"
+    background_color: str = "F7FAFC"
+    title_background_color: str | None = None
+    border_width: float = 0.75
+    padding: float = 6.0
+    space_after: float = 12.0
+
+    def __post_init__(self) -> None:
+        self.border_color = _normalize_color(self.border_color) or "B7C2D0"
+        self.background_color = _normalize_color(self.background_color) or "F7FAFC"
+        self.title_background_color = _normalize_color(self.title_background_color)
+        if self.border_width < 0:
+            raise ValueError("BoxStyle.border_width must be >= 0")
+        if self.padding < 0:
+            raise ValueError("BoxStyle.padding must be >= 0")
+        if self.space_after < 0:
+            raise ValueError("BoxStyle.space_after must be >= 0")
+
+
+@dataclass(slots=True)
 class Theme:
     """Default document theme used by renderers."""
 
@@ -95,6 +251,9 @@ class Theme:
     page_number_alignment: str = "center"
     page_number_format: str = "{page}"
     page_number_font_size: float = 9.0
+    heading_numbering: HeadingNumbering = field(default_factory=HeadingNumbering)
+    bullet_list_style: ListStyle = field(default_factory=lambda: ListStyle(marker_format="bullet", suffix=""))
+    numbered_list_style: ListStyle = field(default_factory=ListStyle)
 
     def __post_init__(self) -> None:
         if self.page_number_alignment not in {"left", "center", "right"}:
@@ -121,6 +280,12 @@ class Theme:
 
     def format_page_number(self, page_number: int) -> str:
         return self.page_number_format.format(page=page_number)
+
+    def format_heading_label(self, counters: Sequence[int]) -> str | None:
+        return self.heading_numbering.format_label(counters)
+
+    def list_style(self, *, ordered: bool) -> ListStyle:
+        return self.numbered_list_style if ordered else self.bullet_list_style
 
 
 @dataclass(slots=True)
@@ -311,24 +476,26 @@ class _ListBlock(Block):
 
     items: list[Paragraph]
     ordered: bool
+    style: ListStyle | None
 
-    def __init__(self, *items: ListInput, ordered: bool = False) -> None:
+    def __init__(self, *items: ListInput, ordered: bool = False, style: ListStyle | None = None) -> None:
         self.items = [coerce_list_item(item) for item in items if item is not None]
         self.ordered = ordered
+        self.style = style
 
 
 class BulletList(_ListBlock):
     """An unordered list of paragraphs."""
 
-    def __init__(self, *items: ListInput) -> None:
-        super().__init__(*items, ordered=False)
+    def __init__(self, *items: ListInput, style: ListStyle | None = None) -> None:
+        super().__init__(*items, ordered=False, style=style)
 
 
 class NumberedList(_ListBlock):
     """An ordered list of paragraphs."""
 
-    def __init__(self, *items: ListInput) -> None:
-        super().__init__(*items, ordered=True)
+    def __init__(self, *items: ListInput, style: ListStyle | None = None) -> None:
+        super().__init__(*items, ordered=True, style=style)
 
 
 @dataclass(slots=True)
@@ -432,6 +599,20 @@ class Body(Block):
 
     def __init__(self, *children: BlockInput) -> None:
         self.children = coerce_blocks(children)
+
+
+@dataclass(slots=True, init=False)
+class Box(Block):
+    """A bordered container for arbitrary authored blocks."""
+
+    children: list[Block]
+    title: list[Text] | None
+    style: BoxStyle
+
+    def __init__(self, *children: BlockInput, title: InlineInput | None = None, style: BoxStyle | None = None) -> None:
+        self.children = coerce_blocks(children)
+        self.title = coerce_inlines((title,)) if title is not None else None
+        self.style = style or BoxStyle()
 
 
 @dataclass(slots=True, init=False)
@@ -604,6 +785,7 @@ class HeadingEntry:
 
     level: int
     title: list[Text]
+    number: str | None = None
 
 
 @dataclass(slots=True)
@@ -672,6 +854,7 @@ class RenderIndex:
     comments: list[CommentReferenceEntry] = field(default_factory=list)
     comment_numbers: dict[int, int] = field(default_factory=dict)
     headings: list[HeadingEntry] = field(default_factory=list)
+    heading_numbers: dict[int, str] = field(default_factory=dict)
 
     def table_number(self, table: Table) -> int | None:
         return self.table_numbers.get(id(table))
@@ -696,16 +879,43 @@ class RenderIndex:
             raise DocscriptorError(f"Unknown comment target: {target.value!r}")
         return self.comment_numbers[id(target)]
 
+    def heading_number(self, target: Section) -> str | None:
+        return self.heading_numbers.get(id(target))
+
 
 def build_render_index(document: Document) -> RenderIndex:
     """Scan a document tree and assign numbers to captioned figures and tables."""
 
     render_index = RenderIndex()
-    _index_blocks(document.body.children, render_index, document.citations)
+    _index_blocks(
+        document.body.children,
+        render_index,
+        document.citations,
+        document.theme,
+        heading_counters=[],
+    )
     return render_index
 
 
-def _index_blocks(blocks: Sequence[Block], render_index: RenderIndex, citations: CitationLibrary) -> None:
+def _advance_heading_counters(counters: list[int], level: int) -> list[int]:
+    while len(counters) < level:
+        counters.append(0)
+    for index in range(max(level - 1, 0)):
+        if counters[index] == 0:
+            counters[index] = 1
+    counters[level - 1] += 1
+    del counters[level:]
+    return counters
+
+
+def _index_blocks(
+    blocks: Sequence[Block],
+    render_index: RenderIndex,
+    citations: CitationLibrary,
+    theme: Theme,
+    *,
+    heading_counters: list[int],
+) -> None:
     for block in blocks:
         if isinstance(block, Paragraph):
             _index_inlines(block.content, render_index, citations)
@@ -716,10 +926,31 @@ def _index_blocks(blocks: Sequence[Block], render_index: RenderIndex, citations:
             continue
         if isinstance(block, Equation):
             continue
+        if isinstance(block, Box):
+            if block.title is not None:
+                _index_inlines(block.title, render_index, citations)
+            _index_blocks(
+                block.children,
+                render_index,
+                citations,
+                theme,
+                heading_counters=list(heading_counters),
+            )
+            continue
         if isinstance(block, Section):
             _index_inlines(block.title, render_index, citations)
-            render_index.headings.append(HeadingEntry(level=block.level, title=block.title))
-            _index_blocks(block.children, render_index, citations)
+            current_counters = _advance_heading_counters(list(heading_counters), block.level)
+            number_label = theme.format_heading_label(current_counters[: block.level])
+            render_index.headings.append(HeadingEntry(level=block.level, title=block.title, number=number_label))
+            if number_label is not None:
+                render_index.heading_numbers[id(block)] = number_label
+            _index_blocks(
+                block.children,
+                render_index,
+                citations,
+                theme,
+                heading_counters=current_counters,
+            )
             continue
         if isinstance(block, (TableList, FigureList, ReferencesPage, CommentsPage, TableOfContents)):
             if block.title is not None:

@@ -4,6 +4,7 @@ from io import BytesIO
 from pathlib import Path
 import struct
 import zlib
+import zipfile
 
 import docscriptor
 from docx import Document as WordDocument
@@ -12,6 +13,8 @@ from pypdf import PdfReader
 
 from docscriptor import (
     Bold,
+    Box,
+    BoxStyle,
     BulletList,
     CitationSource,
     Chapter,
@@ -21,7 +24,9 @@ from docscriptor import (
     Equation,
     Figure,
     FigureList,
+    HeadingNumbering,
     Italic,
+    ListStyle,
     Math,
     Monospace,
     NumberedList,
@@ -147,6 +152,11 @@ def _pdf_text_context(pdf_path: Path, text: str, window: int = 160) -> bytes:
     return content[start : index + len(needle) + window]
 
 
+def _docx_document_xml(docx_path: Path) -> str:
+    with zipfile.ZipFile(docx_path) as archive:
+        return archive.read("word/document.xml").decode("utf-8")
+
+
 def test_version_is_defined() -> None:
     from docscriptor import __version__
 
@@ -201,6 +211,17 @@ def test_theme_validates_page_number_configuration() -> None:
         raise AssertionError("Expected page_number_format validation to fail")
 
 
+def test_numbering_and_list_styles_are_customizable() -> None:
+    heading_numbering = HeadingNumbering(formats=("upper-roman", "lower-alpha"), prefix="[", suffix="]")
+    ordered_style = ListStyle(marker_format="upper-roman", prefix="(", suffix=")")
+    bullet_style = ListStyle(marker_format="bullet", bullet="→", suffix="")
+
+    assert heading_numbering.format_label([2, 3]) == "[II.c]"
+    assert ordered_style.marker_for(0) == "(I)"
+    assert ordered_style.marker_for(2) == "(III)"
+    assert bullet_style.marker_for(1) == "→"
+
+
 def test_heading_hierarchy_uses_latex_like_levels() -> None:
     chapter = Chapter(
         "Part I",
@@ -230,7 +251,11 @@ def test_public_api_prefers_classes_for_structural_nodes() -> None:
     assert hasattr(docscriptor, "FigureList")
     assert hasattr(docscriptor, "cite")
     assert hasattr(docscriptor, "Bold")
+    assert hasattr(docscriptor, "Box")
+    assert hasattr(docscriptor, "BoxStyle")
     assert hasattr(docscriptor, "Italic")
+    assert hasattr(docscriptor, "HeadingNumbering")
+    assert hasattr(docscriptor, "ListStyle")
     assert hasattr(docscriptor, "Monospace")
     assert hasattr(docscriptor, "Table")
     assert hasattr(docscriptor, "Figure")
@@ -339,6 +364,24 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
         caption=Paragraph("Second tiny sample image."),
         width_inches=1.2,
     )
+    boxed_detail = Box(
+        Paragraph("A boxed paragraph can live alongside nested objects."),
+        Table(
+            headers=["Scope", "State"],
+            rows=[["Box", "stable"]],
+            column_widths=[1.4, 1.4],
+        ),
+        Figure(
+            image_path,
+            width_inches=0.7,
+        ),
+        title="Review Box",
+        style=BoxStyle(
+            border_color="#7A8CA5",
+            background_color="#F4F8FC",
+            title_background_color="#DDE8F4",
+        ),
+    )
 
     document = Document(
         "Pipeline Report",
@@ -387,6 +430,7 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
                     cite("release-notes"),
                     ".",
                 ),
+                boxed_detail,
                 Subsection(
                     "Artifacts",
                     BulletList(
@@ -415,7 +459,14 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
         ReferencesPage(),
         author="pytest",
         summary="Renderer integration test",
-        theme=Theme(show_page_numbers=True, page_number_format="Page {page}", page_number_alignment="center"),
+        theme=Theme(
+            show_page_numbers=True,
+            page_number_format="Page {page}",
+            page_number_alignment="center",
+            heading_numbering=HeadingNumbering(),
+            bullet_list_style=ListStyle(marker_format="bullet", bullet="•", suffix=""),
+            numbered_list_style=ListStyle(marker_format="decimal", suffix="."),
+        ),
         citations=[registered_source, unused_source],
     )
 
@@ -433,10 +484,10 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     word_document = WordDocument(docx_path)
     paragraph_texts = [paragraph.text for paragraph in word_document.paragraphs]
     assert "Pipeline Report" in paragraph_texts
-    assert "Summary" in paragraph_texts
-    assert "Highlights" in paragraph_texts
-    assert "Artifacts" in paragraph_texts
-    assert "Export Steps" in paragraph_texts
+    assert "1 Summary" in paragraph_texts
+    assert "1.1 Highlights" in paragraph_texts
+    assert "1.1.1 Artifacts" in paragraph_texts
+    assert "1.1.1.1 Export Steps" in paragraph_texts
     assert "Contents" in paragraph_texts
     assert "Comments" in paragraph_texts
     assert "List of Tables" in paragraph_texts
@@ -444,14 +495,16 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert "References" in paragraph_texts
     assert any("The review note[1] appears inline" in text for text in paragraph_texts)
     assert any("docscriptor" in text for text in paragraph_texts)
-    assert any(text == "Summary" for text in paragraph_texts)
-    assert any(text == "Highlights" for text in paragraph_texts)
+    assert any(text == "1 Summary" for text in paragraph_texts)
+    assert any(text == "1.1 Highlights" for text in paragraph_texts)
     assert any("See Table 1 and Figure 1 for the generated outputs." in text for text in paragraph_texts)
     assert any("Repository status is tracked in [1]." in text for text in paragraph_texts)
     assert any("Registered bibliography entries can still be cited as [2]." in text for text in paragraph_texts)
     assert any("Inline math such as" in text and "2 + " in text and " = " in text for text in paragraph_texts)
     assert any("dx = (" in text and ")/(3)" in text for text in paragraph_texts)
     assert any("[1] Check the generated outputs before release." in text for text in paragraph_texts)
+    assert any(text == "• Lists render into both DOCX and PDF." for text in paragraph_texts)
+    assert any(text == "1. Create the model" for text in paragraph_texts)
     assert paragraph_texts.count("Table 1. Generated artifacts.") >= 2
     assert paragraph_texts.count("Table 2. Output workflow.") >= 2
     assert paragraph_texts.count("Figure 1. Tiny sample image.") >= 2
@@ -460,15 +513,14 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert any("https://github.com/Gonie-Gonie/pydocs/releases" in text for text in paragraph_texts)
     assert all("internal-draft" not in text.lower() for text in paragraph_texts)
     assert any("from docscriptor import Document" in text for text in paragraph_texts)
-    assert any(paragraph.style.name == "List Bullet" for paragraph in word_document.paragraphs)
-    assert any(paragraph.style.name == "List Number" for paragraph in word_document.paragraphs)
-    assert len(word_document.inline_shapes) == 2
+    assert len(word_document.inline_shapes) == 3
 
-    assert len(word_document.tables) == 2
-    assert word_document.tables[0].cell(1, 0).text == "DOCX"
-    assert word_document.tables[0].cell(2, 1).text == "generated"
-    assert word_document.tables[1].cell(1, 0).text == "Draft review"
-    assert word_document.tables[1].cell(2, 1).text == "PDF"
+    assert len(word_document.tables) == 3
+    assert "Review Box" in word_document.tables[0].cell(0, 0).text
+    assert word_document.tables[1].cell(1, 0).text == "DOCX"
+    assert word_document.tables[1].cell(2, 1).text == "generated"
+    assert word_document.tables[2].cell(1, 0).text == "Draft review"
+    assert word_document.tables[2].cell(2, 1).text == "PDF"
     assert word_document.styles["Normal"].font.name == "Times New Roman"
     assert word_document.styles["Title"].font.name == "Times New Roman"
     assert word_document.styles["Heading 1"].font.name == "Times New Roman"
@@ -500,13 +552,17 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert any(run.text == "2" and run.font.superscript for run in equation_paragraph.runs)
     assert any(run.text == "0" and run.font.subscript for run in equation_paragraph.runs)
     assert any(run.text == "1" and run.font.superscript for run in equation_paragraph.runs)
+    docx_xml = _docx_document_xml(docx_path)
+    assert "Review Box" in docx_xml
+    assert "A boxed paragraph can live alongside nested objects." in docx_xml
+    assert "stable" in docx_xml
 
     pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf_path.read_bytes())).pages)
     assert "Pipeline Report" in pdf_text
-    assert "Summary" in pdf_text
-    assert "Highlights" in pdf_text
-    assert "Artifacts" in pdf_text
-    assert "Export Steps" in pdf_text
+    assert "1 Summary" in pdf_text
+    assert "1.1 Highlights" in pdf_text
+    assert "1.1.1 Artifacts" in pdf_text
+    assert "1.1.1.1 Export Steps" in pdf_text
     assert "Contents" in pdf_text
     assert "Comments" in pdf_text
     assert "The review note[1] appears inline and is also exported to the comments page." in pdf_text
@@ -516,6 +572,9 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert "Inline math such as" in pdf_text
     assert "dx = (" in pdf_text
     assert "[1] Check the generated outputs before release." in pdf_text
+    assert "Review Box" in pdf_text
+    assert "A boxed paragraph can live alongside nested objects." in pdf_text
+    assert "stable" in pdf_text
     assert pdf_text.count("Table 1. Generated artifacts.") >= 2
     assert pdf_text.count("Table 2. Output workflow.") >= 2
     assert pdf_text.count("Figure 1. Tiny sample image.") >= 2
@@ -529,8 +588,8 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert "Lists render into both DOCX and PDF." in pdf_text
     assert "from docscriptor import Document" in pdf_text
     assert "1\nLists render into both DOCX and PDF." not in pdf_text
-    assert "1\nCreate the model" in pdf_text
-    assert _pdf_image_draw_count(pdf_path) == 2
+    assert "1.\nCreate the model" in pdf_text
+    assert _pdf_image_draw_count(pdf_path) == 3
     pdf_fonts = _pdf_font_names(pdf_path)
     assert any(font == "/Times-Roman" or "TimesNewRomanPSMT" in font for font in pdf_fonts)
     assert any(font == "/Times-Bold" or "TimesNewRomanPS-Bold" in font for font in pdf_fonts)

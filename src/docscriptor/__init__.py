@@ -3,6 +3,8 @@
 from docscriptor.markup import md, markup
 from docscriptor.model import (
     Bold,
+    Box,
+    BoxStyle,
     Body,
     BulletList,
     CitationLibrary,
@@ -16,7 +18,9 @@ from docscriptor.model import (
     Equation,
     Figure,
     FigureList,
+    HeadingNumbering,
     Italic,
+    ListStyle,
     Math,
     Monospace,
     NumberedList,
@@ -42,6 +46,8 @@ __version__ = "0.1.0"
 
 __all__ = [
     "Bold",
+    "Box",
+    "BoxStyle",
     "Body",
     "BulletList",
     "CitationLibrary",
@@ -55,7 +61,9 @@ __all__ = [
     "Equation",
     "Figure",
     "FigureList",
+    "HeadingNumbering",
     "Italic",
+    "ListStyle",
     "Math",
     "Monospace",
     "NumberedList",

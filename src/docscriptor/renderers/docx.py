@@ -14,6 +14,7 @@ from docscriptor.equations import SUBSCRIPT, SUPERSCRIPT, parse_latex_segments
 from docscriptor.model import (
     _BlockReference,
     Body,
+    Box,
     BulletList,
     Citation,
     Comment,
@@ -59,12 +60,13 @@ class DocxRenderer:
         path.parent.mkdir(parents=True, exist_ok=True)
 
         word_document = WordDocument()
+        self._initialized_cells: set[int] = set()
         render_index = build_render_index(document)
         self._configure_document(word_document, document)
         self._add_heading(word_document, [Text(document.title)], level=0, theme=document.theme)
 
         for child in document.body.children:
-            self._render_block(word_document, child, document.theme, render_index)
+            self._render_block(word_document, child, document.theme, render_index, word_document=word_document)
 
         word_document.save(path)
         return path
@@ -107,55 +109,85 @@ class DocxRenderer:
         if document.theme.show_page_numbers:
             self._add_page_number_footer(word_document, document.theme)
 
-    def _render_block(self, word_document: WordDocument, block: object, theme: Theme, render_index: RenderIndex) -> None:
+    def _render_block(
+        self,
+        container: object,
+        block: object,
+        theme: Theme,
+        render_index: RenderIndex,
+        *,
+        word_document: WordDocument,
+    ) -> None:
         if isinstance(block, Body):
             for child in block.children:
-                self._render_block(word_document, child, theme, render_index)
+                self._render_block(container, child, theme, render_index, word_document=word_document)
             return
         if isinstance(block, Section):
-            self._add_heading(word_document, block.title, block.level, theme)
+            self._add_heading(
+                container,
+                block.title,
+                block.level,
+                theme,
+                number_label=render_index.heading_number(block),
+            )
             for child in block.children:
-                self._render_block(word_document, child, theme, render_index)
+                self._render_block(container, child, theme, render_index, word_document=word_document)
             return
         if isinstance(block, Paragraph):
-            paragraph = word_document.add_paragraph()
+            paragraph = self._add_paragraph(container)
             self._apply_paragraph_style(paragraph, block.style)
             self._append_runs(paragraph, block.content, theme=theme, render_index=render_index, word_document=word_document)
             return
         if isinstance(block, (BulletList, NumberedList)):
-            self._render_list(word_document, block, theme, render_index)
+            self._render_list(container, block, theme, render_index, word_document=word_document)
             return
         if isinstance(block, CodeBlock):
-            self._render_code_block(word_document, block, theme)
+            self._render_code_block(container, block, theme)
             return
         if isinstance(block, Equation):
-            self._render_equation(word_document, block, theme)
+            self._render_equation(container, block, theme)
+            return
+        if isinstance(block, Box):
+            self._render_box(container, block, theme, render_index, word_document=word_document)
             return
         if isinstance(block, CommentsPage):
+            self._assert_document_container(container, "CommentsPage")
             self._render_comments_page(word_document, block.title, theme, render_index)
             return
         if isinstance(block, ReferencesPage):
+            self._assert_document_container(container, "ReferencesPage")
             self._render_references_page(word_document, block.title, theme, render_index)
             return
         if isinstance(block, TableOfContents):
+            self._assert_document_container(container, "TableOfContents")
             self._render_table_of_contents(word_document, block.title, theme, render_index)
             return
         if isinstance(block, TableList):
+            self._assert_document_container(container, "TableList")
             self._render_caption_list(word_document, block.title, render_index.tables, theme, render_index, theme.list_of_tables_title, theme.table_label)
             return
         if isinstance(block, FigureList):
+            self._assert_document_container(container, "FigureList")
             self._render_caption_list(word_document, block.title, render_index.figures, theme, render_index, theme.list_of_figures_title, theme.figure_label)
             return
         if isinstance(block, Table):
-            self._render_table(word_document, block, theme, render_index)
+            self._render_table(container, block, theme, render_index, word_document=word_document)
             return
         if isinstance(block, Figure):
-            self._render_figure(word_document, block, theme, render_index)
+            self._render_figure(container, block, theme, render_index, word_document=word_document)
             return
         raise TypeError(f"Unsupported block type for DOCX rendering: {type(block)!r}")
 
-    def _add_heading(self, word_document: WordDocument, title: list[Text], level: int, theme: Theme) -> None:
-        paragraph = word_document.add_paragraph()
+    def _add_heading(
+        self,
+        container: object,
+        title: list[Text],
+        level: int,
+        theme: Theme,
+        *,
+        number_label: str | None = None,
+    ) -> None:
+        paragraph = self._add_paragraph(container)
         paragraph.style = "Title" if level == 0 else f"Heading {min(level, 9)}"
         if level == 0:
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -165,10 +197,31 @@ class DocxRenderer:
             paragraph.paragraph_format.space_after = Pt(10 if level == 1 else 6)
         self._append_runs(
             paragraph,
-            title,
+            self._heading_fragments(title, number_label),
             default_size=theme.title_font_size if level == 0 else theme.heading_size(level),
             theme=theme,
         )
+
+    def _add_paragraph(self, container: object) -> object:
+        if self._is_cell_container(container):
+            container_id = id(container)
+            if container_id not in self._initialized_cells and container.paragraphs:
+                self._initialized_cells.add(container_id)
+                return container.paragraphs[0]
+            self._initialized_cells.add(container_id)
+        return container.add_paragraph()
+
+    def _is_cell_container(self, container: object) -> bool:
+        return hasattr(container, "_tc") and hasattr(container, "add_table")
+
+    def _assert_document_container(self, container: object, block_name: str) -> None:
+        if self._is_cell_container(container):
+            raise DocscriptorError(f"{block_name} cannot be rendered inside a Box")
+
+    def _heading_fragments(self, title: list[Text], number_label: str | None) -> list[Text]:
+        if not number_label:
+            return title
+        return [Text(f"{number_label} ")] + title
 
     def _apply_paragraph_style(self, paragraph: object, style: ParagraphStyle) -> None:
         paragraph.alignment = ALIGNMENTS[style.alignment]
@@ -258,23 +311,37 @@ class DocxRenderer:
             elif segment.vertical_align == SUBSCRIPT:
                 run.font.subscript = True
 
-    def _render_list(self, word_document: WordDocument, list_block: BulletList | NumberedList, theme: Theme, render_index: RenderIndex) -> None:
-        style_name = "List Number" if isinstance(list_block, NumberedList) else "List Bullet"
-        for item in list_block.items:
-            paragraph = word_document.add_paragraph(style=style_name)
+    def _render_list(
+        self,
+        container: object,
+        list_block: BulletList | NumberedList,
+        theme: Theme,
+        render_index: RenderIndex,
+        *,
+        word_document: WordDocument,
+    ) -> None:
+        list_style = list_block.style or theme.list_style(ordered=isinstance(list_block, NumberedList))
+        for index, item in enumerate(list_block.items):
+            paragraph = self._add_paragraph(container)
             self._apply_paragraph_style(paragraph, item.style)
+            paragraph.paragraph_format.left_indent = Inches(list_style.indent)
+            paragraph.paragraph_format.first_line_indent = Inches(-list_style.indent)
+            marker = list_style.marker_for(index)
+            if marker:
+                marker_run = paragraph.add_run(f"{marker} ")
+                self._apply_run_style(marker_run, Text("").style, default_size=theme.body_font_size)
             self._append_runs(paragraph, item.content, theme=theme, render_index=render_index, word_document=word_document)
 
-    def _render_code_block(self, word_document: WordDocument, code_block: CodeBlock, theme: Theme) -> None:
+    def _render_code_block(self, container: object, code_block: CodeBlock, theme: Theme) -> None:
         if code_block.language:
-            label = word_document.add_paragraph()
+            label = self._add_paragraph(container)
             label.paragraph_format.space_after = Pt(2)
             run = label.add_run(code_block.language.upper())
             run.font.name = theme.monospace_font_name
             run.font.size = Pt(theme.caption_font_size)
             run.font.bold = True
 
-        paragraph = word_document.add_paragraph()
+        paragraph = self._add_paragraph(container)
         self._apply_paragraph_style(paragraph, code_block.style)
         paragraph.paragraph_format.left_indent = Inches(0.25)
         paragraph.paragraph_format.right_indent = Inches(0.1)
@@ -290,8 +357,8 @@ class DocxRenderer:
                 run.add_break()
             run.add_text(line)
 
-    def _render_equation(self, word_document: WordDocument, equation: Equation, theme: Theme) -> None:
-        paragraph = word_document.add_paragraph()
+    def _render_equation(self, container: object, equation: Equation, theme: Theme) -> None:
+        paragraph = self._add_paragraph(container)
         self._apply_paragraph_style(paragraph, equation.style)
         if paragraph.alignment is None:
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -301,9 +368,54 @@ class DocxRenderer:
             default_size=max(theme.body_font_size + 1, 12),
         )
 
-    def _render_table(self, word_document: WordDocument, table_block: Table, theme: Theme, render_index: RenderIndex) -> None:
+    def _render_box(
+        self,
+        container: object,
+        box: Box,
+        theme: Theme,
+        render_index: RenderIndex,
+        *,
+        word_document: WordDocument,
+    ) -> None:
+        outer_table = container.add_table(rows=1, cols=1)
+        cell = outer_table.rows[0].cells[0]
+        cell._tc.clear_content()
+        self._initialized_cells.discard(id(cell))
+        self._set_cell_shading(cell, box.style.background_color)
+        self._set_cell_borders(cell, box.style.border_color, box.style.border_width)
+        self._set_cell_padding(cell, box.style.padding)
+
+        if box.title is not None:
+            title_paragraph = self._add_paragraph(cell)
+            title_paragraph.paragraph_format.space_after = Pt(6)
+            if box.style.title_background_color is not None:
+                self._set_paragraph_shading(title_paragraph, box.style.title_background_color)
+            self._append_runs(
+                title_paragraph,
+                box.title,
+                default_size=theme.body_font_size,
+                theme=theme,
+                render_index=render_index,
+                word_document=word_document,
+            )
+
+        for child in box.children:
+            self._render_block(cell, child, theme, render_index, word_document=word_document)
+
+        if not cell.paragraphs:
+            cell.add_paragraph()
+
+    def _render_table(
+        self,
+        container: object,
+        table_block: Table,
+        theme: Theme,
+        render_index: RenderIndex,
+        *,
+        word_document: WordDocument,
+    ) -> None:
         row_count = len(table_block.rows) + 1
-        table = word_document.add_table(rows=row_count, cols=len(table_block.headers))
+        table = container.add_table(rows=row_count, cols=len(table_block.headers))
         table.style = "Table Grid"
 
         for column_index, header in enumerate(table_block.headers):
@@ -327,10 +439,10 @@ class DocxRenderer:
                     theme=theme,
                     render_index=render_index,
                     word_document=word_document,
-                )
+            )
 
         if table_block.caption is not None:
-            caption = word_document.add_paragraph()
+            caption = self._add_paragraph(container)
             caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
             self._append_runs(
                 caption,
@@ -341,15 +453,23 @@ class DocxRenderer:
                 word_document=word_document,
             )
 
-    def _render_figure(self, word_document: WordDocument, figure: Figure, theme: Theme, render_index: RenderIndex) -> None:
-        paragraph = word_document.add_paragraph()
+    def _render_figure(
+        self,
+        container: object,
+        figure: Figure,
+        theme: Theme,
+        render_index: RenderIndex,
+        *,
+        word_document: WordDocument,
+    ) -> None:
+        paragraph = self._add_paragraph(container)
         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run = paragraph.add_run()
         width = Inches(figure.width_inches) if figure.width_inches is not None else None
         run.add_picture(str(figure.image_path), width=width)
 
         if figure.caption is not None:
-            caption = word_document.add_paragraph()
+            caption = self._add_paragraph(container)
             caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
             self._append_runs(
                 caption,
@@ -367,6 +487,38 @@ class DocxRenderer:
         shading.set(qn("w:color"), "auto")
         shading.set(qn("w:fill"), fill)
         paragraph_properties.append(shading)
+
+    def _set_cell_shading(self, cell: object, fill: str) -> None:
+        properties = cell._tc.get_or_add_tcPr()
+        shading = OxmlElement("w:shd")
+        shading.set(qn("w:val"), "clear")
+        shading.set(qn("w:color"), "auto")
+        shading.set(qn("w:fill"), fill)
+        properties.append(shading)
+
+    def _set_cell_borders(self, cell: object, color: str, width: float) -> None:
+        properties = cell._tc.get_or_add_tcPr()
+        borders = OxmlElement("w:tcBorders")
+        size = str(max(int(round(width * 8)), 0))
+        for edge_name in ("top", "left", "bottom", "right"):
+            edge = OxmlElement(f"w:{edge_name}")
+            edge.set(qn("w:val"), "single")
+            edge.set(qn("w:sz"), size)
+            edge.set(qn("w:space"), "0")
+            edge.set(qn("w:color"), color)
+            borders.append(edge)
+        properties.append(borders)
+
+    def _set_cell_padding(self, cell: object, padding: float) -> None:
+        properties = cell._tc.get_or_add_tcPr()
+        margins = OxmlElement("w:tcMar")
+        margin_value = str(max(int(round(padding * 20)), 0))
+        for side in ("top", "left", "bottom", "right"):
+            element = OxmlElement(f"w:{side}")
+            element.set(qn("w:w"), margin_value)
+            element.set(qn("w:type"), "dxa")
+            margins.append(element)
+        properties.append(margins)
 
     def _configure_named_style(
         self,
@@ -427,7 +579,7 @@ class DocxRenderer:
         default_title: str,
         label: str,
     ) -> None:
-        self._add_heading(word_document, title or [Text(default_title)], level=theme.generated_section_level, theme=theme)
+        self._add_heading(word_document, title or [Text(default_title)], level=theme.generated_section_level, theme=theme, number_label=None)
         for entry in entries:
             paragraph = word_document.add_paragraph()
             paragraph.paragraph_format.left_indent = Inches(0.25)
@@ -448,7 +600,7 @@ class DocxRenderer:
         render_index: RenderIndex,
     ) -> None:
         word_document.add_page_break()
-        self._add_heading(word_document, title or [Text(theme.comments_title)], level=theme.generated_section_level, theme=theme)
+        self._add_heading(word_document, title or [Text(theme.comments_title)], level=theme.generated_section_level, theme=theme, number_label=None)
         for entry in render_index.comments:
             paragraph = word_document.add_paragraph()
             paragraph.paragraph_format.left_indent = Inches(0.3)
@@ -470,7 +622,7 @@ class DocxRenderer:
         render_index: RenderIndex,
     ) -> None:
         word_document.add_page_break()
-        self._add_heading(word_document, title or [Text(theme.references_title)], level=theme.generated_section_level, theme=theme)
+        self._add_heading(word_document, title or [Text(theme.references_title)], level=theme.generated_section_level, theme=theme, number_label=None)
         for entry in render_index.citations:
             paragraph = word_document.add_paragraph()
             paragraph.paragraph_format.left_indent = Inches(0.3)
@@ -491,14 +643,14 @@ class DocxRenderer:
         theme: Theme,
         render_index: RenderIndex,
     ) -> None:
-        self._add_heading(word_document, title or [Text(theme.contents_title)], level=theme.generated_section_level, theme=theme)
+        self._add_heading(word_document, title or [Text(theme.contents_title)], level=theme.generated_section_level, theme=theme, number_label=None)
         for entry in render_index.headings:
             paragraph = word_document.add_paragraph()
             paragraph.paragraph_format.left_indent = Inches(0.2 * max(entry.level - 1, 0))
             paragraph.paragraph_format.space_after = Pt(3)
             self._append_runs(
                 paragraph,
-                entry.title,
+                self._heading_fragments(entry.title, entry.number),
                 default_size=theme.body_font_size,
                 theme=theme,
                 render_index=render_index,

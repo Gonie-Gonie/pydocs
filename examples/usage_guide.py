@@ -8,6 +8,8 @@ import zlib
 
 from docscriptor import (
     Bold,
+    Box,
+    BoxStyle,
     BulletList,
     CitationSource,
     Chapter,
@@ -17,6 +19,8 @@ from docscriptor import (
     Equation,
     Figure,
     FigureList,
+    HeadingNumbering,
+    ListStyle,
     Monospace,
     NumberedList,
     Paragraph,
@@ -299,6 +303,11 @@ def _build_usage_guide_tables() -> UsageGuideTables:
             "Preformatted code snippet that keeps indentation intact in DOCX and PDF.",
         ),
         _api_reference_row(
+            "Box",
+            "Box(*children, title=None, style=None)",
+            "Bordered container for paragraphs, lists, tables, figures, and other authored blocks when the layout should stay visually grouped.",
+        ),
+        _api_reference_row(
             "Equation",
             "Equation(expression, style=ParagraphStyle(alignment='center', ...))",
             "Centered block equation using lightweight LaTeX-style input shared by both renderers.",
@@ -383,9 +392,24 @@ def _build_usage_guide_tables() -> UsageGuideTables:
             "Paragraph-level alignment and spacing configuration.",
         ),
         _api_reference_row(
+            "BoxStyle",
+            "BoxStyle(border_color='B7C2D0', background_color='F7FAFC', ...)",
+            "Visual styling for Box, including border, fill, and padding defaults shared by DOCX and PDF renderers.",
+        ),
+        _api_reference_row(
+            "HeadingNumbering",
+            "HeadingNumbering(enabled=True, formats=('decimal', ...), separator='.', ...)",
+            "Controls default chapter and section numbering such as 1, 1.1, and 1.1.1.",
+        ),
+        _api_reference_row(
+            "ListStyle",
+            "ListStyle(marker_format='decimal', bullet='•', prefix='', suffix='.', ...)",
+            "Configures bullet and ordered-list markers, numbering style, and indentation.",
+        ),
+        _api_reference_row(
             "Theme",
             "Theme(body_font_name='Times New Roman', monospace_font_name='Courier New', ...)",
-            "Document-wide renderer defaults for fonts, labels, headings, and generated section titles.",
+            "Document-wide renderer defaults for fonts, labels, heading numbering, list markers, and generated section titles.",
         ),
         _api_reference_row(
             "styled",
@@ -449,9 +473,13 @@ def _build_usage_guide_tables() -> UsageGuideTables:
         _method_reference_row("Equation.plain_text()", "Return a readable plain-text representation of the block equation."),
         _method_reference_row("Section.plain_title()", "Return a plain-text version of a heading title."),
         _method_reference_row("TextStyle.merged(*others)", "Overlay later inline styles on top of earlier ones."),
+        _method_reference_row("HeadingNumbering.format_label(counters)", "Render the configured hierarchical heading label from a sequence of counters."),
+        _method_reference_row("ListStyle.marker_for(index)", "Return the rendered bullet or ordered-list marker for a zero-based item index."),
         _method_reference_row("Theme.heading_size(level)", "Return the configured font size for a heading level."),
         _method_reference_row("Theme.heading_emphasis(level)", "Return the (bold, italic) emphasis tuple for a heading level."),
         _method_reference_row("Theme.heading_alignment(level)", "Return the alignment used for the given heading level."),
+        _method_reference_row("Theme.format_heading_label(counters)", "Render the heading numbering label that should precede a chapter or section title."),
+        _method_reference_row("Theme.list_style(ordered=...)", "Return the default ListStyle used for bullet or ordered lists."),
         _method_reference_row("Theme.format_page_number(page_number)", "Render the configured footer page number string for a page."),
         _method_reference_row("CitationSource.format_reference()", "Format a bibliography entry for the generated references page."),
         _method_reference_row("CitationLibrary.add(entry)", "Register a keyed citation source inside the library."),
@@ -796,12 +824,29 @@ def build_usage_guide_document(output_dir: Path) -> Document:
                     Monospace("page_number_alignment"),
                     ", and ",
                     Monospace("page_number_format"),
-                    "."
+                    ". Numbered headings default to values such as ",
+                    Monospace("1"),
+                    ", ",
+                    Monospace("1.1"),
+                    ", and ",
+                    Monospace("1.1.1"),
+                    " through ",
+                    Bold("HeadingNumbering"),
+                    ", while ",
+                    Bold("ListStyle"),
+                    " controls bullet and ordered-list markers."
                 ),
                 tables.inline_reference,
                 NoteParagraph(
                     "If you prefer markdown-like authoring over explicit fragments, ",
                     markup("`markup()` and `md()` produce the same kind of inline Text objects."),
+                ),
+                Paragraph(
+                    "For visually grouped content such as warnings, review notes, or side calculations, use ",
+                    Bold("Box"),
+                    " together with ",
+                    Bold("BoxStyle"),
+                    " to keep related blocks inside a single bordered container."
                 ),
                 Paragraph(
                     "Portable comments such as ",
