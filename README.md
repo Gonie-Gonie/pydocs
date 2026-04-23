@@ -16,6 +16,7 @@ The package now ships with a basic document object model and two renderers:
 - block objects such as `Document`, `Body`, `Chapter`, `Section`, `Subsection`, `Subsubsection`, `Paragraph`, `CodeBlock`, `Table`, and `Figure`
 - boxed layout blocks such as `Box(...)` for visually grouped content
 - list and generated blocks such as `BulletList`, `NumberedList`, `TableOfContents`, `TableList`, and `FigureList`
+- portable footnotes collected through `footnote(...)` and `FootnotesPage()`
 - object references by reusing `Table` and `Figure` instances directly inside paragraphs
 - citation helpers such as `cite(...)`, `CitationSource`, `CitationLibrary`, and `ReferencesPage`
 - inline objects such as `Text`, `Bold`, `Italic`, `Monospace`, and `styled(...)`
@@ -38,6 +39,7 @@ Headings are numbered by default using labels such as `1`, `1.1`, and `1.1.1`, a
 Captioned tables and figures are numbered automatically, can be cited from prose by reusing the same object instance, and can be collected into generated lists.
 Bibliography data can be supplied with Python objects or as a BibTeX string, then rendered through `cite(...)` and a generated references page that only includes cited sources.
 Generated front matter such as a table of contents or lists of tables and figures is rendered with section-level headings so it reads like part of the document structure.
+Portable footnotes are rendered as inline superscript markers and collected on a generated footnotes page so the behavior stays stable across both DOCX and PDF outputs, including inside table cells.
 
 The core model in `docscriptor.model` is intentionally class-based so users can build their own abstractions on top.
 For example, a team can subclass `Paragraph`, `Section`, or `Document` to create house styles, reusable callouts, or report templates.

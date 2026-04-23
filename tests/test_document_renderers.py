@@ -24,6 +24,8 @@ from docscriptor import (
     Equation,
     Figure,
     FigureList,
+    Footnote,
+    FootnotesPage,
     HeadingNumbering,
     Italic,
     ListStyle,
@@ -42,6 +44,7 @@ from docscriptor import (
     Theme,
     cite,
     comment,
+    footnote,
     math,
     markup,
     styled,
@@ -186,6 +189,7 @@ def test_list_classes_create_block_instances() -> None:
 
 def test_comment_and_math_helpers_create_renderable_fragments() -> None:
     inline_comment = comment("term", "Expanded note", author="pytest", initials="PT")
+    inline_footnote = footnote("term", "Portable footnote note")
     inline_math = math(r"\alpha^2 + \beta^2")
     equation = Equation(r"\frac{1}{2}")
 
@@ -193,6 +197,8 @@ def test_comment_and_math_helpers_create_renderable_fragments() -> None:
     assert inline_comment.plain_text() == "term[?]"
     assert inline_comment.author == "pytest"
     assert inline_comment.initials == "PT"
+    assert isinstance(inline_footnote, Footnote)
+    assert inline_footnote.plain_text() == "term[?]"
     assert isinstance(inline_math, Math)
     assert inline_math.plain_text() == "α2 + β2"
     assert equation.plain_text() == "(1)/(2)"
@@ -262,6 +268,8 @@ def test_public_api_prefers_classes_for_structural_nodes() -> None:
     assert hasattr(docscriptor, "TableOfContents")
     assert hasattr(docscriptor, "Comment")
     assert hasattr(docscriptor, "CommentsPage")
+    assert hasattr(docscriptor, "Footnote")
+    assert hasattr(docscriptor, "FootnotesPage")
     assert hasattr(docscriptor, "Equation")
     assert hasattr(docscriptor, "Math")
     assert not hasattr(docscriptor, "ListBlock")
@@ -272,6 +280,7 @@ def test_public_api_prefers_classes_for_structural_nodes() -> None:
     assert not hasattr(docscriptor, "Emphasis")
     assert not hasattr(docscriptor, "Code")
     assert hasattr(docscriptor, "comment")
+    assert hasattr(docscriptor, "footnote")
     assert hasattr(docscriptor, "math")
 
     for removed_name in (
@@ -339,7 +348,7 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     artifacts_table = Table(
         headers=["Type", "Status"],
         rows=[
-            ["DOCX", "generated"],
+            ["DOCX", Paragraph("generated ", footnote("state", "Table cell footnote note."))],
             ["PDF", "generated"],
         ],
         caption="Generated artifacts.",
@@ -430,6 +439,11 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
                     cite("release-notes"),
                     ".",
                 ),
+                Paragraph(
+                    "Portable footnotes such as ",
+                    footnote("term", "Paragraph footnote note."),
+                    " are collected on a generated footnotes page.",
+                ),
                 boxed_detail,
                 Subsection(
                     "Artifacts",
@@ -455,6 +469,7 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
                 ),
             ),
         ),
+        FootnotesPage(),
         CommentsPage(),
         ReferencesPage(),
         author="pytest",
@@ -490,6 +505,7 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert "1.1.1.1 Export Steps" in paragraph_texts
     assert "Contents" in paragraph_texts
     assert "Comments" in paragraph_texts
+    assert "Footnotes" in paragraph_texts
     assert "List of Tables" in paragraph_texts
     assert "List of Figures" in paragraph_texts
     assert "References" in paragraph_texts
@@ -500,8 +516,11 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert any("See Table 1 and Figure 1 for the generated outputs." in text for text in paragraph_texts)
     assert any("Repository status is tracked in [1]." in text for text in paragraph_texts)
     assert any("Registered bibliography entries can still be cited as [2]." in text for text in paragraph_texts)
+    assert any("Portable footnotes such as term" in text and "generated footnotes page." in text for text in paragraph_texts)
     assert any("Inline math such as" in text and "2 + " in text and " = " in text for text in paragraph_texts)
     assert any("dx = (" in text and ")/(3)" in text for text in paragraph_texts)
+    assert any("Table cell footnote note." in text for text in paragraph_texts)
+    assert any("Paragraph footnote note." in text for text in paragraph_texts)
     assert any("[1] Check the generated outputs before release." in text for text in paragraph_texts)
     assert any(text == "• Lists render into both DOCX and PDF." for text in paragraph_texts)
     assert any(text == "1. Create the model" for text in paragraph_texts)
@@ -518,6 +537,7 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert len(word_document.tables) == 3
     assert "Review Box" in word_document.tables[0].cell(0, 0).text
     assert word_document.tables[1].cell(1, 0).text == "DOCX"
+    assert word_document.tables[1].cell(1, 1).text.startswith("generated")
     assert word_document.tables[1].cell(2, 1).text == "generated"
     assert word_document.tables[2].cell(1, 0).text == "Draft review"
     assert word_document.tables[2].cell(2, 1).text == "PDF"
@@ -537,6 +557,7 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert heading_styles["List of Tables"] == "Heading 2"
     assert heading_styles["List of Figures"] == "Heading 2"
     assert heading_styles["References"] == "Heading 2"
+    assert next(paragraph.style.name for paragraph in word_document.paragraphs if paragraph.text == "Footnotes") == "Heading 2"
     assert len(word_document.comments) == 1
     assert "Check the generated outputs before release." in "\n".join(
         paragraph.text
@@ -565,12 +586,16 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert "1.1.1.1 Export Steps" in pdf_text
     assert "Contents" in pdf_text
     assert "Comments" in pdf_text
+    assert "Footnotes" in pdf_text
     assert "The review note[1] appears inline and is also exported to the comments page." in pdf_text
     assert "See Table 1 and Figure 1 for the generated outputs." in pdf_text
     assert "Repository status is tracked in [1]." in pdf_text
     assert "Registered bibliography entries can still be cited as [2]." in pdf_text
+    assert "Portable footnotes such as term" in pdf_text and "generated footnotes page." in pdf_text
     assert "Inline math such as" in pdf_text
     assert "dx = (" in pdf_text
+    assert "Table cell footnote note." in pdf_text
+    assert "Paragraph footnote note." in pdf_text
     assert "[1] Check the generated outputs before release." in pdf_text
     assert "Review Box" in pdf_text
     assert "A boxed paragraph can live alongside nested objects." in pdf_text

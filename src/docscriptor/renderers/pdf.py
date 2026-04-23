@@ -31,6 +31,8 @@ from docscriptor.model import (
     Equation,
     Figure,
     FigureList,
+    Footnote,
+    FootnotesPage,
     Math,
     NumberedList,
     Paragraph,
@@ -221,6 +223,8 @@ class PdfRenderer:
             return self._render_box(block, theme, styles, render_index)
         if isinstance(block, CommentsPage):
             return self._render_comments_page(block.title, theme, styles, render_index)
+        if isinstance(block, FootnotesPage):
+            return self._render_footnotes_page(block.title, theme, styles, render_index)
         if isinstance(block, ReferencesPage):
             return self._render_references_page(block.title, theme, styles, render_index)
         if isinstance(block, TableOfContents):
@@ -573,6 +577,17 @@ class PdfRenderer:
                 base_italic=base_italic,
             )
             return f"{visible}<super>{escape(self._comment_marker(fragment, render_index))}</super>"
+        if isinstance(fragment, Footnote):
+            visible = self._styled_text_markup(
+                fragment.value,
+                fragment,
+                theme,
+                base_font_name=base_font_name,
+                base_size=base_size,
+                base_bold=base_bold,
+                base_italic=base_italic,
+            )
+            return f"{visible}<super>{escape(self._footnote_marker(fragment, render_index))}</super>"
         if isinstance(fragment, Math):
             return self._math_markup(
                 fragment,
@@ -686,6 +701,8 @@ class PdfRenderer:
         if isinstance(fragment, Citation):
             return f"[{render_index.citation_number(fragment.target)}]"
         if isinstance(fragment, Comment):
+            return fragment.value
+        if isinstance(fragment, Footnote):
             return fragment.value
         if isinstance(fragment, Math):
             return fragment.plain_text()
@@ -814,6 +831,67 @@ class PdfRenderer:
                 RLParagraph(
                     self._inline_markup(
                         [Text(f"[{entry.number}] ")] + entry.comment.comment,
+                        theme,
+                        render_index,
+                        base_font_name=entry_style.fontName,
+                        base_size=entry_style.fontSize,
+                    ),
+                    entry_style,
+                )
+            )
+        return story
+
+    def _render_footnotes_page(
+        self,
+        title: list[Text] | None,
+        theme: Theme,
+        styles: object,
+        render_index: RenderIndex,
+    ) -> list[object]:
+        level = theme.generated_section_level
+        bold, italic = theme.heading_emphasis(level)
+        title_style = RLParagraphStyle(
+            "FootnotesPageTitle",
+            parent=styles["Heading1"],
+            fontName=self._resolve_font(theme.body_font_name, bold, italic),
+            fontSize=theme.heading_size(level),
+            leading=theme.heading_size(level) * 1.2,
+            spaceBefore=0,
+            spaceAfter=10,
+            alignment=ALIGNMENTS[theme.heading_alignment(level)],
+            textColor=colors.black,
+        )
+        entry_style = RLParagraphStyle(
+            "FootnoteEntry",
+            parent=styles["BodyText"],
+            fontName=self._resolve_font(theme.body_font_name, False, False),
+            fontSize=theme.body_font_size,
+            leading=theme.body_font_size * 1.35,
+            leftIndent=18,
+            firstLineIndent=-18,
+            spaceAfter=6,
+            textColor=colors.black,
+        )
+        story: list[object] = [
+            PageBreak(),
+            RLParagraph(
+                self._inline_markup(
+                    title or [Text(theme.footnotes_title)],
+                    theme,
+                    render_index,
+                    base_font_name=title_style.fontName,
+                    base_size=title_style.fontSize,
+                    base_bold=bold,
+                    base_italic=italic,
+                ),
+                title_style,
+            ),
+        ]
+        for entry in render_index.footnotes:
+            story.append(
+                RLParagraph(
+                    self._inline_markup(
+                        [Text(f"[{entry.number}] ")] + entry.footnote.note,
                         theme,
                         render_index,
                         base_font_name=entry_style.fontName,
@@ -954,3 +1032,6 @@ class PdfRenderer:
 
     def _comment_marker(self, fragment: Comment, render_index: RenderIndex) -> str:
         return f"[{render_index.comment_number(fragment)}]"
+
+    def _footnote_marker(self, fragment: Footnote, render_index: RenderIndex) -> str:
+        return str(render_index.footnote_number(fragment))

@@ -244,6 +244,7 @@ class Theme:
     list_of_tables_title: str = "List of Tables"
     list_of_figures_title: str = "List of Figures"
     comments_title: str = "Comments"
+    footnotes_title: str = "Footnotes"
     references_title: str = "References"
     contents_title: str = "Contents"
     generated_section_level: int = 2
@@ -390,6 +391,25 @@ def comment(
     """Create inline text with an attached numbered comment."""
 
     return Comment(value, *note, author=author, initials=initials, style=style)
+
+
+class Footnote(Text):
+    """Inline text annotated with a portable numbered footnote."""
+
+    __slots__ = ("note",)
+
+    def __init__(self, value: str, *note: InlineInput, style: TextStyle | None = None) -> None:
+        super().__init__(value=value, style=style or TextStyle())
+        self.note = coerce_inlines(note)
+
+    def plain_text(self) -> str:
+        return f"{self.value}[?]"
+
+
+def footnote(value: str, *note: InlineInput, style: TextStyle | None = None) -> Footnote:
+    """Create inline text with a numbered portable footnote."""
+
+    return Footnote(value, *note, style=style)
 
 
 class Math(Text):
@@ -551,6 +571,16 @@ class ReferencesPage(Block):
 @dataclass(slots=True, init=False)
 class CommentsPage(Block):
     """Generated page for numbered comments encountered in the document."""
+
+    title: list[Text] | None
+
+    def __init__(self, title: InlineInput | None = None) -> None:
+        self.title = coerce_inlines((title,)) if title is not None else None
+
+
+@dataclass(slots=True, init=False)
+class FootnotesPage(Block):
+    """Generated page for numbered footnotes encountered in the document."""
 
     title: list[Text] | None
 
@@ -780,6 +810,14 @@ class CommentReferenceEntry:
 
 
 @dataclass(slots=True)
+class FootnoteReferenceEntry:
+    """A numbered footnote encountered in the document tree."""
+
+    number: int
+    footnote: Footnote
+
+
+@dataclass(slots=True)
 class HeadingEntry:
     """A heading included in the generated table of contents."""
 
@@ -853,6 +891,8 @@ class RenderIndex:
     citation_source_numbers: dict[int, int] = field(default_factory=dict)
     comments: list[CommentReferenceEntry] = field(default_factory=list)
     comment_numbers: dict[int, int] = field(default_factory=dict)
+    footnotes: list[FootnoteReferenceEntry] = field(default_factory=list)
+    footnote_numbers: dict[int, int] = field(default_factory=dict)
     headings: list[HeadingEntry] = field(default_factory=list)
     heading_numbers: dict[int, str] = field(default_factory=dict)
 
@@ -878,6 +918,11 @@ class RenderIndex:
         if id(target) not in self.comment_numbers:
             raise DocscriptorError(f"Unknown comment target: {target.value!r}")
         return self.comment_numbers[id(target)]
+
+    def footnote_number(self, target: Footnote) -> int:
+        if id(target) not in self.footnote_numbers:
+            raise DocscriptorError(f"Unknown footnote target: {target.value!r}")
+        return self.footnote_numbers[id(target)]
 
     def heading_number(self, target: Section) -> str | None:
         return self.heading_numbers.get(id(target))
@@ -952,7 +997,7 @@ def _index_blocks(
                 heading_counters=current_counters,
             )
             continue
-        if isinstance(block, (TableList, FigureList, ReferencesPage, CommentsPage, TableOfContents)):
+        if isinstance(block, (TableList, FigureList, ReferencesPage, CommentsPage, FootnotesPage, TableOfContents)):
             if block.title is not None:
                 _index_inlines(block.title, render_index, citations)
             continue
@@ -986,6 +1031,14 @@ def _index_inlines(fragments: Sequence[Text], render_index: RenderIndex, citatio
             number = len(render_index.comments) + 1
             render_index.comments.append(CommentReferenceEntry(number=number, comment=fragment))
             render_index.comment_numbers[id(fragment)] = number
+            continue
+        if isinstance(fragment, Footnote):
+            _index_inlines(fragment.note, render_index, citations)
+            if id(fragment) in render_index.footnote_numbers:
+                continue
+            number = len(render_index.footnotes) + 1
+            render_index.footnotes.append(FootnoteReferenceEntry(number=number, footnote=fragment))
+            render_index.footnote_numbers[id(fragment)] = number
             continue
         if isinstance(fragment, Citation):
             target = fragment.target

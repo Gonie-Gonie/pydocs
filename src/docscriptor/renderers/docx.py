@@ -25,6 +25,8 @@ from docscriptor.model import (
     Equation,
     Figure,
     FigureList,
+    Footnote,
+    FootnotesPage,
     Math,
     NumberedList,
     Paragraph,
@@ -154,6 +156,10 @@ class DocxRenderer:
             self._assert_document_container(container, "CommentsPage")
             self._render_comments_page(word_document, block.title, theme, render_index)
             return
+        if isinstance(block, FootnotesPage):
+            self._assert_document_container(container, "FootnotesPage")
+            self._render_footnotes_page(word_document, block.title, theme, render_index)
+            return
         if isinstance(block, ReferencesPage):
             self._assert_document_container(container, "ReferencesPage")
             self._render_references_page(word_document, block.title, theme, render_index)
@@ -251,6 +257,9 @@ class DocxRenderer:
                     word_document=word_document,
                 )
                 continue
+            if isinstance(fragment, Footnote):
+                self._append_footnote_runs(paragraph, fragment, default_size=default_size, render_index=render_index)
+                continue
             if isinstance(fragment, Math):
                 self._append_math_runs(paragraph, fragment, default_size=default_size)
                 continue
@@ -301,6 +310,22 @@ class DocxRenderer:
                 author=fragment.author or "",
                 initials=fragment.initials,
             )
+
+    def _append_footnote_runs(
+        self,
+        paragraph: object,
+        fragment: Footnote,
+        *,
+        default_size: float | None,
+        render_index: RenderIndex | None,
+    ) -> None:
+        if fragment.value:
+            visible_run = paragraph.add_run(fragment.value)
+            self._apply_run_style(visible_run, fragment.style, default_size=default_size)
+
+        marker_run = paragraph.add_run(self._footnote_marker(fragment, render_index))
+        self._apply_run_style(marker_run, fragment.style, default_size=max((default_size or 10.0) - 2, 8))
+        marker_run.font.superscript = True
 
     def _append_math_runs(self, paragraph: object, fragment: Math, *, default_size: float | None = None) -> None:
         for segment in parse_latex_segments(fragment.value):
@@ -548,6 +573,8 @@ class DocxRenderer:
             return f"[{render_index.citation_number(fragment.target)}]"
         if isinstance(fragment, Comment):
             return fragment.value
+        if isinstance(fragment, Footnote):
+            return fragment.value
         if isinstance(fragment, Math):
             return fragment.plain_text()
         return fragment.value
@@ -608,6 +635,28 @@ class DocxRenderer:
             self._append_runs(
                 paragraph,
                 [Text(f"[{entry.number}] ")] + entry.comment.comment,
+                default_size=theme.body_font_size,
+                theme=theme,
+                render_index=render_index,
+                word_document=word_document,
+            )
+
+    def _render_footnotes_page(
+        self,
+        word_document: WordDocument,
+        title: list[Text] | None,
+        theme: Theme,
+        render_index: RenderIndex,
+    ) -> None:
+        word_document.add_page_break()
+        self._add_heading(word_document, title or [Text(theme.footnotes_title)], level=theme.generated_section_level, theme=theme, number_label=None)
+        for entry in render_index.footnotes:
+            paragraph = word_document.add_paragraph()
+            paragraph.paragraph_format.left_indent = Inches(0.3)
+            paragraph.paragraph_format.first_line_indent = Inches(-0.3)
+            self._append_runs(
+                paragraph,
+                [Text(f"[{entry.number}] ")] + entry.footnote.note,
                 default_size=theme.body_font_size,
                 theme=theme,
                 render_index=render_index,
@@ -689,12 +738,21 @@ class DocxRenderer:
             return "[?]"
         return f"[{render_index.comment_number(fragment)}]"
 
+    def _footnote_marker(self, fragment: Footnote, render_index: RenderIndex | None) -> str:
+        if render_index is None:
+            return "?"
+        return str(render_index.footnote_number(fragment))
+
     def _flatten_fragments(self, fragments: list[Text], theme: Theme | None, render_index: RenderIndex | None) -> str:
         parts: list[str] = []
         for fragment in fragments:
             if isinstance(fragment, Comment):
                 parts.append(fragment.value)
                 parts.append(self._comment_marker(fragment, render_index))
+                continue
+            if isinstance(fragment, Footnote):
+                parts.append(fragment.value)
+                parts.append(self._footnote_marker(fragment, render_index))
                 continue
             parts.append(self._resolve_fragment_text(fragment, theme, render_index))
         return "".join(parts)

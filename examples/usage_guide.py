@@ -19,6 +19,7 @@ from docscriptor import (
     Equation,
     Figure,
     FigureList,
+    FootnotesPage,
     HeadingNumbering,
     ListStyle,
     Monospace,
@@ -35,6 +36,7 @@ from docscriptor import (
     Theme,
     cite,
     comment,
+    footnote,
     math,
     markup,
     styled,
@@ -340,6 +342,11 @@ def _build_usage_guide_tables() -> UsageGuideTables:
             "Generated list of captioned figures with their numbers.",
         ),
         _api_reference_row(
+            "FootnotesPage",
+            "FootnotesPage(title=None)",
+            "Generated page collecting numbered portable footnotes encountered in the document.",
+        ),
+        _api_reference_row(
             "CommentsPage",
             "CommentsPage(title=None)",
             "Generated page collecting numbered comments encountered in the document.",
@@ -375,6 +382,11 @@ def _build_usage_guide_tables() -> UsageGuideTables:
             "Comment",
             "Comment(value, *comment, author=None, initials=None, style=None)",
             "Inline text with a numbered portable comment marker and optional DOCX comment metadata.",
+        ),
+        _api_reference_row(
+            "Footnote",
+            "Footnote(value, *note, style=None)",
+            "Inline text with a numbered portable footnote marker collected into FootnotesPage.",
         ),
         _api_reference_row(
             "Math",
@@ -442,6 +454,11 @@ def _build_usage_guide_tables() -> UsageGuideTables:
             "comment",
             "comment(value, *note, author=None, initials=None, style=None)",
             "Create inline text with a numbered portable comment that can also populate CommentsPage.",
+        ),
+        _api_reference_row(
+            "footnote",
+            "footnote(value, *note, style=None)",
+            "Create inline text with a numbered portable footnote that can also populate FootnotesPage.",
         ),
         _api_reference_row(
             "markup",
@@ -851,6 +868,8 @@ def build_usage_guide_document(output_dir: Path) -> Document:
                 Paragraph(
                     "Portable comments such as ",
                     comment("review note", "DOCX output adds a native Word comment and both renderers can list it on a comments page."),
+                    ", footnotes such as ",
+                    footnote("term", "Portable footnotes are collected on a generated footnotes page for stable DOCX/PDF output."),
                     " can travel with the document, and inline math such as ",
                     math(r"\alpha^2 + \beta^2 = \gamma^2"),
                     " stays readable without leaving Python."
@@ -905,6 +924,7 @@ def build_usage_guide_document(output_dir: Path) -> Document:
                 ),
             ),
         ),
+        FootnotesPage(),
         CommentsPage(),
         ReferencesPage(),
         author="docscriptor examples",

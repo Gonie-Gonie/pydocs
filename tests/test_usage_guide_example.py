@@ -105,6 +105,7 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert "1.1 Public Methods" in paragraph_texts
     assert "Comments" in paragraph_texts
     assert "Contents" in paragraph_texts
+    assert "Footnotes" in paragraph_texts
     assert "List of Tables" in paragraph_texts
     assert "List of Figures" in paragraph_texts
     assert "References" in paragraph_texts
@@ -119,8 +120,10 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert any("__version__ exposes the package version string" in text for text in paragraph_texts)
     assert any("Body," in text for text in paragraph_texts)
     assert any("Portable comments such as review note[1]" in text for text in paragraph_texts)
+    assert any("footnotes such as term1" in text for text in paragraph_texts)
     assert any("inline math such as" in text and "2 + " in text and " = " in text for text in paragraph_texts)
     assert any("dx = (" in text and ")/(3)" in text for text in paragraph_texts)
+    assert any("Portable footnotes are collected on a generated footnotes page" in text for text in paragraph_texts)
     assert any(text == "1. Import the model objects you need." for text in paragraph_texts)
     assert any(text == "• Show a complete example without losing indentation." for text in paragraph_texts)
     assert 'w:instr="PAGE"' in word_document.sections[0].footer.paragraphs[0]._p.xml
@@ -132,10 +135,13 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert word_document.tables[1].cell(2, 1).text == "PDF"
     assert word_document.tables[2].cell(1, 0).text == "Document"
     assert word_document.tables[3].cell(5, 0).text == "Box"
-    assert word_document.tables[5].cell(9, 0).text == "BoxStyle"
-    assert word_document.tables[5].cell(10, 0).text == "HeadingNumbering"
-    assert word_document.tables[5].cell(11, 0).text == "ListStyle"
-    assert word_document.tables[6].cell(7, 0).text == "__version__"
+    assert word_document.tables[4].cell(4, 0).text == "FootnotesPage"
+    assert word_document.tables[5].cell(6, 0).text == "Footnote"
+    assert word_document.tables[5].cell(10, 0).text == "BoxStyle"
+    assert word_document.tables[5].cell(11, 0).text == "HeadingNumbering"
+    assert word_document.tables[5].cell(12, 0).text == "ListStyle"
+    assert word_document.tables[6].cell(5, 0).text == "footnote"
+    assert word_document.tables[6].cell(8, 0).text == "__version__"
     assert word_document.tables[7].cell(1, 0).text == "Document.save_docx(path)"
     assert paragraph_texts.count("Table 1. Core authoring primitives.") >= 2
     assert paragraph_texts.count("Table 2. Rendering outputs by goal.") >= 2
@@ -148,8 +154,9 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert paragraph_texts.index("List of Tables") < paragraph_texts.index("List of Figures")
     assert paragraph_texts.index("List of Figures") < paragraph_texts.index("Contents")
     assert paragraph_texts.index("Contents") < paragraph_texts.index("1 Getting Started")
-    heading_styles = {paragraph.text: paragraph.style.name for paragraph in word_document.paragraphs if paragraph.text in {"Comments", "List of Tables", "List of Figures", "References"}}
+    heading_styles = {paragraph.text: paragraph.style.name for paragraph in word_document.paragraphs if paragraph.text in {"Comments", "Footnotes", "List of Tables", "List of Figures", "References"}}
     assert heading_styles["Comments"] == "Heading 2"
+    assert heading_styles["Footnotes"] == "Heading 2"
     assert heading_styles["List of Tables"] == "Heading 2"
     assert heading_styles["List of Figures"] == "Heading 2"
     assert heading_styles["References"] == "Heading 2"
@@ -193,6 +200,7 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert "Public Methods" in pdf_text
     assert "Comments" in pdf_text
     assert "Contents" in pdf_text
+    assert "Footnotes" in pdf_text
     assert "List of Tables" in pdf_text
     assert "List of Figures" in pdf_text
     assert "References" in pdf_text
@@ -214,12 +222,14 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert "__version__ exposes the package version string" in normalized_pdf_text
     assert "Body" in pdf_text
     assert "Portable comments such as review note[1]" in pdf_text
+    assert "footnotes such as term1" in pdf_text
     assert "inline math such as" in pdf_text
     assert "dx = (" in pdf_text
     assert "Page 1" in pdf_text
     assert "https://github.com/Gonie-Gonie/pydocs" in pdf_text
     assert "Literate Programming" in pdf_text
     assert "https://doi.org/10.1093/comjnl/27.2.97" in pdf_text
+    assert "Portable footnotes are collected on a generated footnotes page" in pdf_text
     assert _pdf_image_draw_count(pdf_path) == 2
     assert pdf_text.index("List of Tables") < pdf_text.index("List of Figures")
     assert pdf_text.index("List of Figures") < pdf_text.index("Contents")
@@ -234,6 +244,7 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert b"15 Tf" in _pdf_text_context(pdf_path, "Contents")
     assert b"15 Tf" in _pdf_text_context(pdf_path, "List of Tables")
     assert b"15 Tf" in _pdf_text_context(pdf_path, "List of Figures")
+    assert b"15 Tf" in _pdf_text_context(pdf_path, "Footnotes")
     assert b"15 Tf" in _pdf_text_context(pdf_path, "Comments")
     assert b"15 Tf" in _pdf_text_context(pdf_path, "References")
     for public_name in docscriptor.__all__:
