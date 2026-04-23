@@ -31,6 +31,8 @@ from docscriptor import (
     Subsection,
     Subsubsection,
     Table,
+    TableCell,
+    TableStyle,
     TableOfContents,
     TableList,
     Theme,
@@ -316,13 +318,23 @@ def _build_usage_guide_tables() -> UsageGuideTables:
         ),
         _api_reference_row(
             "Table",
-            "Table(headers, rows, caption=None, column_widths=None, identifier=None)",
-            "Grid-style text table. Captioned tables are numbered and added to TableList.",
+            "Table(headers_or_dataframe, rows=None, caption=None, column_widths=None, identifier=None, style=None, include_index=False)",
+            "Grid-style table. Accept explicit rows or dataframe-like objects directly, and captioned tables are numbered and added to TableList.",
+        ),
+        _api_reference_row(
+            "TableCell",
+            "TableCell(value, colspan=1, rowspan=1, background_color=None)",
+            "Single table cell object used when you need explicit multicolumn or multirow spans.",
+        ),
+        _api_reference_row(
+            "TableStyle",
+            "TableStyle(header_background_color='E8EDF5', border_color='B7C2D0', ...)",
+            "Renderer-neutral table styling for header fill, borders, row banding, and padding.",
         ),
         _api_reference_row(
             "Figure",
-            "Figure(image_path, caption=None, width_inches=None, identifier=None)",
-            "Image block. Captioned figures are numbered and added to FigureList.",
+            "Figure(image_source, caption=None, width_inches=None, identifier=None, format='png', dpi=150)",
+            "Image block that accepts a filesystem path or a savefig()-compatible figure object. Captioned figures are numbered and added to FigureList.",
         ),
     ]
     generated_rows = [
@@ -489,6 +501,7 @@ def _build_usage_guide_tables() -> UsageGuideTables:
         _method_reference_row("Paragraph.plain_text()", "Join paragraph content into plain text without styling metadata."),
         _method_reference_row("Equation.plain_text()", "Return a readable plain-text representation of the block equation."),
         _method_reference_row("Section.plain_title()", "Return a plain-text version of a heading title."),
+        _method_reference_row("Table.from_dataframe(dataframe, ...)", "Create a Table directly from a dataframe-like object while preserving column metadata."),
         _method_reference_row("TextStyle.merged(*others)", "Overlay later inline styles on top of earlier ones."),
         _method_reference_row("HeadingNumbering.format_label(counters)", "Render the configured hierarchical heading label from a sequence of counters."),
         _method_reference_row("ListStyle.marker_for(index)", "Return the rendered bullet or ordered-list marker for a zero-based item index."),
@@ -798,7 +811,11 @@ def build_usage_guide_document(output_dir: Path) -> Document:
                     tables.block_reference,
                     " for authored blocks and ",
                     tables.generated_reference,
-                    " for generated blocks. Captioned tables and figures participate in numbering automatically."
+                    " for generated blocks. Captioned tables and figures participate in numbering automatically, ",
+                    Bold("Table"),
+                    " can be built directly from dataframe-like objects, and ",
+                    Bold("Figure"),
+                    " can render savefig()-compatible figure objects without a temporary file."
                 ),
                 tables.block_reference,
                 tables.generated_reference,

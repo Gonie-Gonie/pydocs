@@ -18,6 +18,7 @@ The package now ships with a basic document object model and two renderers:
 - list and generated blocks such as `BulletList`, `NumberedList`, `TableOfContents`, `TableList`, and `FigureList`
 - portable footnotes collected through `footnote(...)` and `FootnotesPage()`
 - object references by reusing `Table` and `Figure` instances directly inside paragraphs
+- table authoring helpers such as `TableCell(...)` and `TableStyle(...)` for merged cells and color control
 - citation helpers such as `cite(...)`, `CitationSource`, `CitationLibrary`, and `ReferencesPage`
 - inline objects such as `Text`, `Bold`, `Italic`, `Monospace`, and `styled(...)`
 - a lightweight `markup(...)` helper for markdown-like inline bold, italic, and code formatting
@@ -37,6 +38,7 @@ The remaining helper functions are reserved for places where they transform cont
 The default theme uses Times New Roman for body copy and progressively stronger heading treatment for chapter and section levels.
 Headings are numbered by default using labels such as `1`, `1.1`, and `1.1.1`, and both heading numbering and list marker styles can be customized with `HeadingNumbering(...)` and `ListStyle(...)`.
 Captioned tables and figures are numbered automatically, can be cited from prose by reusing the same object instance, and can be collected into generated lists.
+Tables can be authored explicitly with spanned `TableCell(...)` objects or built directly from dataframe-like objects, and figures can be rendered either from filesystem paths or from `savefig()`-compatible Python objects.
 Bibliography data can be supplied with Python objects or as a BibTeX string, then rendered through `cite(...)` and a generated references page that only includes cited sources.
 Generated front matter such as a table of contents or lists of tables and figures is rendered with section-level headings so it reads like part of the document structure.
 Portable footnotes are rendered as inline superscript markers and collected on a generated footnotes page so the behavior stays stable across both DOCX and PDF outputs, including inside table cells.

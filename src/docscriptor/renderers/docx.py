@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 
 from docx import Document as WordDocument
@@ -40,6 +41,7 @@ from docscriptor.model import (
     TableList,
     Text,
     Theme,
+    build_table_layout,
     build_render_index,
 )
 
@@ -439,32 +441,46 @@ class DocxRenderer:
         *,
         word_document: WordDocument,
     ) -> None:
-        row_count = len(table_block.rows) + 1
-        table = container.add_table(rows=row_count, cols=len(table_block.headers))
+        layout = build_table_layout(table_block.header_rows, table_block.rows)
+        table = container.add_table(rows=layout.row_count, cols=layout.column_count)
         table.style = "Table Grid"
+        if table_block.column_widths is not None:
+            for column_index, width in enumerate(table_block.column_widths):
+                table.columns[column_index].width = Inches(width)
 
-        for column_index, header in enumerate(table_block.headers):
-            paragraph = table.rows[0].cells[column_index].paragraphs[0]
+        for placement in layout.placements:
+            start_cell = table.cell(placement.row, placement.column)
+            target_cell = start_cell
+            if placement.cell.colspan > 1 or placement.cell.rowspan > 1:
+                end_cell = table.cell(
+                    placement.row + placement.cell.rowspan - 1,
+                    placement.column + placement.cell.colspan - 1,
+                )
+                target_cell = start_cell.merge(end_cell)
+
+            paragraph = target_cell.paragraphs[0]
             self._append_runs(
                 paragraph,
-                header.content or [Text("")],
+                placement.cell.content.content or [Text("")],
                 theme=theme,
                 render_index=render_index,
                 word_document=word_document,
             )
-            for run in paragraph.runs:
-                run.bold = True
-
-        for row_index, row in enumerate(table_block.rows, start=1):
-            for column_index, cell in enumerate(row):
-                paragraph = table.rows[row_index].cells[column_index].paragraphs[0]
-                self._append_runs(
-                    paragraph,
-                    cell.content or [Text("")],
-                    theme=theme,
-                    render_index=render_index,
-                    word_document=word_document,
-            )
+            if placement.header:
+                for run in paragraph.runs:
+                    run.bold = True
+                    run.font.color.rgb = RGBColor.from_string(table_block.style.header_text_color)
+                self._set_cell_shading(target_cell, table_block.style.header_background_color)
+            else:
+                background_color = placement.cell.background_color
+                if background_color is None and table_block.style.alternate_row_background_color is not None and placement.body_row_index is not None and placement.body_row_index % 2 == 1:
+                    background_color = table_block.style.alternate_row_background_color
+                if background_color is None:
+                    background_color = table_block.style.body_background_color
+                if background_color is not None:
+                    self._set_cell_shading(target_cell, background_color)
+            self._set_cell_borders(target_cell, table_block.style.border_color, 0.5)
+            self._set_cell_padding(target_cell, table_block.style.cell_padding)
 
         if table_block.caption is not None:
             caption = self._add_paragraph(container)
@@ -491,7 +507,7 @@ class DocxRenderer:
         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run = paragraph.add_run()
         width = Inches(figure.width_inches) if figure.width_inches is not None else None
-        run.add_picture(str(figure.image_path), width=width)
+        run.add_picture(self._figure_picture_source(figure), width=width)
 
         if figure.caption is not None:
             caption = self._add_paragraph(container)
@@ -640,6 +656,22 @@ class DocxRenderer:
                 render_index=render_index,
                 word_document=word_document,
             )
+
+    def _figure_picture_source(self, figure: Figure) -> str | BytesIO:
+        source = figure.image_source
+        if isinstance(source, Path):
+            return str(source)
+        if hasattr(source, "savefig"):
+            buffer = BytesIO()
+            save_kwargs: dict[str, object] = {
+                "format": figure.format,
+            }
+            if figure.dpi is not None:
+                save_kwargs["dpi"] = figure.dpi
+            source.savefig(buffer, **save_kwargs)
+            buffer.seek(0)
+            return buffer
+        raise TypeError(f"Unsupported figure source for DOCX rendering: {type(source)!r}")
 
     def _render_footnotes_page(
         self,

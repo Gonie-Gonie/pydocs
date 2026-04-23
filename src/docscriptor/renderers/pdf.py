@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from html import escape
+from io import BytesIO
 from pathlib import Path
 
 from reportlab.lib import colors
@@ -46,6 +47,7 @@ from docscriptor.model import (
     TableList,
     Text,
     Theme,
+    build_table_layout,
     build_render_index,
 )
 
@@ -257,58 +259,77 @@ class PdfRenderer:
             "TableHeader",
             parent=body_style,
             fontName=self._resolve_font(theme.body_font_name, True, False),
+            textColor=colors.HexColor(f"#{block.style.header_text_color}"),
         )
-
-        table_rows: list[list[object]] = [
-            [
-                RLParagraph(
-                    self._inline_markup(
-                        cell.content,
-                        theme,
-                        render_index,
-                        base_font_name=header_style.fontName,
-                        base_size=header_style.fontSize,
-                        base_bold=True,
-                        base_italic=False,
-                    ),
-                    header_style,
-                )
-                for cell in block.headers
-            ]
+        layout = build_table_layout(block.header_rows, block.rows)
+        table_rows: list[list[object]] = [["" for _ in range(layout.column_count)] for _ in range(layout.row_count)]
+        style_commands: list[tuple[str, tuple[int, int], tuple[int, int], object]] = [
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor(f"#{block.style.border_color}")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), block.style.cell_padding),
+            ("RIGHTPADDING", (0, 0), (-1, -1), block.style.cell_padding),
+            ("TOPPADDING", (0, 0), (-1, -1), block.style.cell_padding),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), block.style.cell_padding),
         ]
-        for row in block.rows:
-            table_rows.append(
-                [
-                    RLParagraph(
-                        self._inline_markup(
-                            cell.content,
-                            theme,
-                            render_index,
-                            base_font_name=body_style.fontName,
-                            base_size=body_style.fontSize,
-                        ),
-                        body_style,
-                    )
-                    for cell in row
-                ]
+        for placement in layout.placements:
+            paragraph_style = header_style if placement.header else body_style
+            table_rows[placement.row][placement.column] = RLParagraph(
+                self._inline_markup(
+                    placement.cell.content.content,
+                    theme,
+                    render_index,
+                    base_font_name=paragraph_style.fontName,
+                    base_size=paragraph_style.fontSize,
+                    base_bold=placement.header,
+                    base_italic=False,
+                ),
+                paragraph_style,
             )
+            if placement.cell.colspan > 1 or placement.cell.rowspan > 1:
+                style_commands.append(
+                    (
+                        "SPAN",
+                        (placement.column, placement.row),
+                        (
+                            placement.column + placement.cell.colspan - 1,
+                            placement.row + placement.cell.rowspan - 1,
+                        ),
+                    )
+                )
+            if placement.header:
+                style_commands.append(
+                    (
+                        "BACKGROUND",
+                        (placement.column, placement.row),
+                        (
+                            placement.column + placement.cell.colspan - 1,
+                            placement.row + placement.cell.rowspan - 1,
+                        ),
+                        colors.HexColor(f"#{block.style.header_background_color}"),
+                    )
+                )
+            else:
+                background_color = placement.cell.background_color
+                if background_color is None and block.style.alternate_row_background_color is not None and placement.body_row_index is not None and placement.body_row_index % 2 == 1:
+                    background_color = block.style.alternate_row_background_color
+                if background_color is None:
+                    background_color = block.style.body_background_color
+                if background_color is not None:
+                    style_commands.append(
+                        (
+                            "BACKGROUND",
+                            (placement.column, placement.row),
+                            (
+                                placement.column + placement.cell.colspan - 1,
+                                placement.row + placement.cell.rowspan - 1,
+                            ),
+                            colors.HexColor(f"#{background_color}"),
+                        )
+                    )
 
         column_widths = [width * inch for width in block.column_widths] if block.column_widths is not None else None
         table = RLTable(table_rows, colWidths=column_widths, hAlign="LEFT")
-        table.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E8EDF5")),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
-                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#B7C2D0")),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                    ("TOPPADDING", (0, 0), (-1, -1), 5),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ]
-            )
-        )
+        table.setStyle(TableStyle(style_commands))
 
         story: list[object] = [table]
         if block.caption is not None:
@@ -491,7 +512,7 @@ class PdfRenderer:
         ]
 
     def _render_figure(self, block: Figure, theme: Theme, styles: object, render_index: RenderIndex) -> list[object]:
-        image = RLImage(str(block.image_path))
+        image = RLImage(self._figure_image_source(block))
         if block.width_inches is not None:
             target_width = block.width_inches * inch
             scale = target_width / image.drawWidth
@@ -524,6 +545,22 @@ class PdfRenderer:
         else:
             elements.append(Spacer(1, 12))
         return [KeepTogether(elements)]
+
+    def _figure_image_source(self, block: Figure) -> str | BytesIO:
+        source = block.image_source
+        if isinstance(source, Path):
+            return str(source)
+        if hasattr(source, "savefig"):
+            buffer = BytesIO()
+            save_kwargs: dict[str, object] = {
+                "format": block.format,
+            }
+            if block.dpi is not None:
+                save_kwargs["dpi"] = block.dpi
+            source.savefig(buffer, **save_kwargs)
+            buffer.seek(0)
+            return buffer
+        raise TypeError(f"Unsupported figure source for PDF rendering: {type(source)!r}")
 
     def _inline_markup(
         self,

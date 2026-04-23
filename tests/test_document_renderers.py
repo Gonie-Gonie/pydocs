@@ -39,6 +39,8 @@ from docscriptor import (
     Subsection,
     Subsubsection,
     Table,
+    TableCell,
+    TableStyle,
     TableOfContents,
     TableList,
     Theme,
@@ -91,6 +93,51 @@ def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
     payload = chunk_type + data
     checksum = zlib.crc32(payload) & 0xFFFFFFFF
     return struct.pack(">I", len(data)) + payload + struct.pack(">I", checksum)
+
+
+class FakeAxis:
+    def __init__(self, values: list[object], names: tuple[str | None, ...] = ("",)) -> None:
+        self._values = values
+        self.names = names
+        self.name = names[0] if names else None
+        self.nlevels = max((len(value) if isinstance(value, tuple) else 1) for value in values) if values else 1
+
+    def tolist(self) -> list[object]:
+        return list(self._values)
+
+    def __iter__(self):
+        return iter(self._values)
+
+
+class FakeDataFrame:
+    def __init__(
+        self,
+        *,
+        columns: list[object],
+        rows: list[list[object]],
+        index: list[object] | None = None,
+        index_names: tuple[str | None, ...] = ("",),
+    ) -> None:
+        self.columns = FakeAxis(columns)
+        self._rows = rows
+        self.index = FakeAxis(index or list(range(len(rows))), names=index_names)
+
+    def itertuples(self, *, index: bool = False, name: str | None = None):
+        for row_index, row in enumerate(self._rows):
+            if index:
+                yield (self.index.tolist()[row_index], *row)
+            else:
+                yield tuple(row)
+
+
+class FakeFigure:
+    def __init__(self, image_bytes: bytes) -> None:
+        self.image_bytes = image_bytes
+        self.calls: list[dict[str, object]] = []
+
+    def savefig(self, target: object, **kwargs: object) -> None:
+        self.calls.append(dict(kwargs))
+        target.write(self.image_bytes)
 
 
 def _pdf_font_names(pdf_path: Path) -> set[str]:
@@ -228,6 +275,33 @@ def test_numbering_and_list_styles_are_customizable() -> None:
     assert bullet_style.marker_for(1) == "→"
 
 
+def test_table_accepts_dataframe_like_inputs_and_spans() -> None:
+    dataframe = FakeDataFrame(
+        columns=[("Metrics", "Latency"), ("Metrics", "Quality"), ("Summary", "")],
+        rows=[["14 ms", "stable", "ready"]],
+    )
+    table = Table(
+        dataframe,
+        caption="Span test.",
+        column_widths=[1.5, 1.5, 1.5],
+        style=TableStyle(alternate_row_background_color="#F4F8FC"),
+    )
+    merged_header = Table(
+        headers=[
+            [TableCell("Metrics", colspan=2), TableCell("Summary", rowspan=2)],
+            ["Latency", "Quality"],
+        ],
+        rows=[["14 ms", "stable", "ready"]],
+        column_widths=[1.5, 1.5, 1.5],
+    )
+
+    assert len(table.header_rows) == 2
+    assert table.header_rows[0][0].colspan == 2
+    assert table.header_rows[0][1].rowspan == 2
+    assert table.layout().column_count == 3
+    assert merged_header.layout().row_count == 3
+
+
 def test_heading_hierarchy_uses_latex_like_levels() -> None:
     chapter = Chapter(
         "Part I",
@@ -264,6 +338,8 @@ def test_public_api_prefers_classes_for_structural_nodes() -> None:
     assert hasattr(docscriptor, "ListStyle")
     assert hasattr(docscriptor, "Monospace")
     assert hasattr(docscriptor, "Table")
+    assert hasattr(docscriptor, "TableCell")
+    assert hasattr(docscriptor, "TableStyle")
     assert hasattr(docscriptor, "Figure")
     assert hasattr(docscriptor, "TableOfContents")
     assert hasattr(docscriptor, "Comment")
@@ -353,23 +429,48 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
         ],
         caption="Generated artifacts.",
         column_widths=[2.5, 2.5],
+        style=TableStyle(
+            header_background_color="#DCE8F4",
+            alternate_row_background_color="#F7FAFD",
+        ),
+    )
+    workflow_frame = FakeDataFrame(
+        columns=[("Workflow", "Step"), ("Workflow", "Target"), ("Result", "")],
+        rows=[
+            ["Draft review", "DOCX", "ready"],
+            ["Release", "PDF", "published"],
+        ],
     )
     workflow_table = Table(
-        headers=["Step", "Target"],
-        rows=[
-            ["Draft review", "DOCX"],
-            ["Release", "PDF"],
-        ],
+        workflow_frame,
         caption="Output workflow.",
-        column_widths=[2.5, 2.5],
+        column_widths=[2.2, 1.6, 1.6],
+        style=TableStyle(alternate_row_background_color="#EEF4FA"),
+    )
+    merged_header_table = Table(
+        headers=[
+            [TableCell("Metrics", colspan=2), TableCell("Summary", rowspan=2)],
+            ["Latency", "Quality"],
+        ],
+        rows=[
+            [
+                TableCell("14 ms"),
+                TableCell("stable", background_color="#EEF6FF"),
+                TableCell("ready"),
+            ]
+        ],
+        caption="Merged header table.",
+        column_widths=[1.6, 1.6, 1.6],
+        style=TableStyle(header_background_color="#D9E6F2"),
     )
     preview_figure = Figure(
         image_path,
         caption=Paragraph("Tiny sample image."),
         width_inches=1.0,
     )
+    figure_object = FakeFigure(_build_sample_png(width=320, height=180))
     preview_figure_second = Figure(
-        image_path,
+        figure_object,
         caption=Paragraph("Second tiny sample image."),
         width_inches=1.2,
     )
@@ -462,6 +563,7 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
                     NumberedList("Create the model", "Render the files"),
                     artifacts_table,
                     workflow_table,
+                    merged_header_table,
                     preview_figure,
                     preview_figure_second,
                     TableList(),
@@ -526,6 +628,7 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert any(text == "1. Create the model" for text in paragraph_texts)
     assert paragraph_texts.count("Table 1. Generated artifacts.") >= 2
     assert paragraph_texts.count("Table 2. Output workflow.") >= 2
+    assert paragraph_texts.count("Table 3. Merged header table.") >= 2
     assert paragraph_texts.count("Figure 1. Tiny sample image.") >= 2
     assert paragraph_texts.count("Figure 2. Second tiny sample image.") >= 2
     assert any("https://github.com/Gonie-Gonie/pydocs" in text for text in paragraph_texts)
@@ -534,13 +637,15 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert any("from docscriptor import Document" in text for text in paragraph_texts)
     assert len(word_document.inline_shapes) == 3
 
-    assert len(word_document.tables) == 3
+    assert len(word_document.tables) == 4
     assert "Review Box" in word_document.tables[0].cell(0, 0).text
     assert word_document.tables[1].cell(1, 0).text == "DOCX"
     assert word_document.tables[1].cell(1, 1).text.startswith("generated")
     assert word_document.tables[1].cell(2, 1).text == "generated"
-    assert word_document.tables[2].cell(1, 0).text == "Draft review"
-    assert word_document.tables[2].cell(2, 1).text == "PDF"
+    assert word_document.tables[2].cell(2, 0).text == "Draft review"
+    assert word_document.tables[2].cell(3, 1).text == "PDF"
+    assert word_document.tables[3].cell(2, 0).text == "14 ms"
+    assert word_document.tables[3].cell(2, 2).text == "ready"
     assert word_document.styles["Normal"].font.name == "Times New Roman"
     assert word_document.styles["Title"].font.name == "Times New Roman"
     assert word_document.styles["Heading 1"].font.name == "Times New Roman"
@@ -577,6 +682,10 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert "Review Box" in docx_xml
     assert "A boxed paragraph can live alongside nested objects." in docx_xml
     assert "stable" in docx_xml
+    assert "D9E6F2" in docx_xml
+    assert "DCE8F4" in docx_xml
+    assert len(figure_object.calls) >= 2
+    assert all(call.get("format") == "png" for call in figure_object.calls)
 
     pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf_path.read_bytes())).pages)
     assert "Pipeline Report" in pdf_text
@@ -602,6 +711,7 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert "stable" in pdf_text
     assert pdf_text.count("Table 1. Generated artifacts.") >= 2
     assert pdf_text.count("Table 2. Output workflow.") >= 2
+    assert pdf_text.count("Table 3. Merged header table.") >= 2
     assert pdf_text.count("Figure 1. Tiny sample image.") >= 2
     assert pdf_text.count("Figure 2. Second tiny sample image.") >= 2
     assert "List of Tables" in pdf_text
