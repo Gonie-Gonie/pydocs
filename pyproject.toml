@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "docscriptor"
-version = "0.1.0"
-description = "Python-first document composition toolkit for generating PDF and DOCX outputs."
+version = "0.2.0"
+description = "Python-first document authoring toolkit for generating DOCX and PDF outputs from the same source."
 readme = "README.md"
 requires-python = ">=3.14"
 license = "MIT"
@@ -17,6 +17,7 @@ keywords = ["document generation", "pdf", "docx", "python"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.14",
@@ -29,17 +30,23 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+examples = [
+  "matplotlib>=3.10.0",
+  "pandas>=2.3.0",
+]
 dev = [
   "build>=1.2.0",
   "matplotlib>=3.10.0",
   "pandas>=2.3.0",
   "pypdf>=5.4.0",
   "pytest>=8.0.0",
+  "twine>=6.1.0",
 ]
 
 [project.urls]
 Homepage = "https://github.com/Gonie-Gonie/pydocs"
 Repository = "https://github.com/Gonie-Gonie/pydocs"
+Documentation = "https://github.com/Gonie-Gonie/pydocs#readme"
 Issues = "https://github.com/Gonie-Gonie/pydocs/issues"
 
 [tool.setuptools]

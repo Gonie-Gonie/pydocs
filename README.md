@@ -1,146 +1,79 @@
 # docscriptor
 
-Docscriptor is an early-stage, Python-first alternative to LaTeX for teams who want documents to be defined with regular Python code.
-The long-term goal is to compose structured content in scripts, reuse templates and components, and render the same source into PDF and DOCX outputs.
+Docscriptor is a Python-first document authoring toolkit for people who want to define structured documents with normal Python code and render the same source to both DOCX and PDF.
 
-## Vision
+It is aimed at report, documentation, and manuscript workflows where content already lives near Python data, figures, and scripts.
 
-- define documents with normal Python modules, functions, and data structures
-- make document generation programmable, testable, and reusable
-- support multiple export targets without committing to a TeX-centric workflow
+## Install
 
-## Current Structure
+Install the core package:
 
-The package now ships with a modular document model plus two renderers:
-
-- `document.py` for the root `Document` entry point
-- `blocks.py` for structural and block-level objects such as `Chapter`, `Section`, `Paragraph`, `CodeBlock`, `Box`, and generated pages
-- `inline.py` for inline fragments and content-transforming methods such as `Text.bold(...)`, `Text.from_markup(...)`, `Comment.annotated(...)`, and `Footnote.annotated(...)`
-- `tables.py` for `Table`, `TableCell`, dataframe support, and `Figure`
-- `styles.py` for `TextStyle`, `ParagraphStyle`, `HeadingNumbering`, `ListStyle`, `BoxStyle`, `TableStyle`, and `Theme`
-- `references.py` for `CitationSource`, `CitationLibrary`, and bibliography helpers
-- `renderers/docx.py` and `renderers/pdf.py` for format-specific layout logic driven by each block's `render_to_docx(...)` and `render_to_pdf(...)` methods
-
-## Authoring Model
-
-The intended workflow is:
-
-1. define a document tree with Python instances
-2. subclass the provided building blocks when you want reusable semantics
-3. render the same tree into one or more output formats
-
-Instantiate structural nodes directly with classes such as `Document`, `Chapter`, `Section`, and `Paragraph`.
-That same rule applies to lists, so use `BulletList` and `NumberedList` directly instead of constructor-style wrapper functions.
-For inline actions, prefer explicit methods when they read well, such as `Text.bold(...)`, `Text.from_markup(...)`, `Comment.annotated(...)`, `Footnote.annotated(...)`, `Math.inline(...)`, or `CitationSource.cite()`.
-The helper functions remain available as short compatibility aliases for the same transformations.
-The default theme uses Times New Roman for body copy and progressively stronger heading treatment for chapter and section levels.
-Headings are numbered by default using labels such as `1`, `1.1`, and `1.1.1`, and both heading numbering and list marker styles can be customized with `HeadingNumbering(...)` and `ListStyle(...)`.
-Captioned tables and figures are numbered automatically, can be cited from prose by reusing the same object instance, and can be collected into generated lists.
-Tables can be authored explicitly with spanned `TableCell(...)` objects or built directly from dataframe-like objects, and figures can be rendered either from filesystem paths or from `savefig()`-compatible Python objects.
-Bibliography data can be supplied with Python objects or as a BibTeX string, then rendered through `cite(...)` and a generated references page that only includes cited sources.
-Generated front matter such as a table of contents or lists of tables and figures is rendered with section-level headings so it reads like part of the document structure.
-Portable footnotes are rendered as inline superscript markers and collected on a generated footnotes page so the behavior stays stable across both DOCX and PDF outputs, including inside table cells.
-
-The core model in `docscriptor.model` is intentionally class-based so users can build their own abstractions on top.
-For example, a team can subclass `Paragraph`, `Section`, or `Document` to create house styles, reusable callouts, or report templates.
-
-```python
-from docscriptor import Paragraph, ParagraphStyle, Text
-
-
-class WarningParagraph(Paragraph):
-    def __init__(self, *content):
-        super().__init__(
-            Text.bold("Warning: "),
-            *content,
-            style=ParagraphStyle(space_after=14),
-        )
+```powershell
+pip install docscriptor
 ```
 
-Example:
+Install the extra dependencies used by the example scripts:
+
+```powershell
+pip install "docscriptor[examples]"
+```
+
+For local development:
+
+```powershell
+pip install -e ".[dev]"
+```
+
+## Quick Start
 
 ```python
-from docscriptor import (
-    Chapter,
-    Document,
-    CodeBlock,
-    Figure,
-    FigureList,
-    TableList,
-    CitationSource,
-    Paragraph,
-    ReferencesPage,
-    Section,
-    Subsection,
-    Subsubsection,
-    Table,
-    TableOfContents,
-    Text,
-)
-
-metrics_table = Table(
-    headers=["Metric", "Value"],
-    rows=[
-        ["Latency", "14 ms"],
-        ["Success rate", "99.8%"],
-    ],
-    caption="Summary metrics.",
-)
-output_figure = Figure(
-    "example.png",
-    caption=Paragraph("Example output."),
-    width_inches=3.0,
-)
-repository_source = CitationSource(
-    "Experiment assets",
-    organization="Docscriptor",
-    year="2026",
-    url="https://github.com/Gonie-Gonie/pydocs",
-)
+from docscriptor import Chapter, Document, Paragraph, Section, Text
 
 report = Document(
-    "Experiment Report",
+    "Hello docscriptor",
     Chapter(
-        "Analysis",
+        "Getting Started",
         Section(
             "Overview",
             Paragraph(
-                "This document was written in Python with ",
-                Text.styled("custom emphasis", bold=True),
-                " and ",
-                Text.from_markup("**lightweight** *markup* support."),
-            ),
-            Paragraph(
-                "See ",
-                metrics_table,
-                " and ",
-                output_figure,
-                " for the exported assets. Repository metadata appears in ",
-                repository_source.cite(),
+                "This document was defined with ",
+                Text.bold("Python objects"),
                 ".",
             ),
-            Subsection(
-                "Measurements",
-                metrics_table,
-                Subsubsection(
-                    "Exports",
-                    CodeBlock(
-                        "report.save_docx('artifacts/report.docx')\nreport.save_pdf('artifacts/report.pdf')",
-                        language="python",
-                    ),
-                ),
-            ),
-            output_figure,
-            TableOfContents(),
-            Paragraph(Text.bold("Rendered inline labels remain easy to spot.")),
-            TableList(),
-            FigureList(),
-            ReferencesPage(),
         ),
     ),
     author="Docscriptor",
 )
+
+report.save_docx("artifacts/hello.docx")
+report.save_pdf("artifacts/hello.pdf")
 ```
+
+## Authoring Model
+
+Docscriptor tries to keep the source readable:
+
+- create objects with classes such as `Document`, `Chapter`, `Section`, `Paragraph`, `Table`, and `Figure`
+- apply inline actions with methods such as `Text.bold(...)`, `Text.italic(...)`, `Text.code(...)`, `Text.from_markup(...)`, `Comment.annotated(...)`, `Footnote.annotated(...)`, and `CitationSource.cite()`
+- keep the document tree explicit so the Python structure matches the final output structure
+
+The default behavior is intentionally conventional:
+
+- paragraphs are justified by default
+- headings are numbered as `1`, `1.1`, `1.1.1`, and so on
+- ordered and bullet lists can be customized with `ListStyle(...)`
+- heading numbering can be customized with `HeadingNumbering(...)`
+- article-style front matter can be left unnumbered with `Section(..., numbered=False)`
+
+## Features
+
+- DOCX and PDF rendering from the same document tree
+- block objects for paragraphs, lists, code blocks, equations, boxes, tables, figures, and generated pages
+- portable comments and footnotes that stay stable across both outputs
+- captioned tables and figures with automatic numbering and in-text references
+- table support for `TableCell(...)`, `rowspan`, `colspan`, banded rows, and dataframe-like inputs
+- figure support for both stored image files and `savefig()`-compatible Python objects
+- bibliography support through `CitationSource`, `CitationLibrary`, direct citation objects, and BibTeX import
 
 ## Example Scripts
 
@@ -149,52 +82,50 @@ The repository includes two standalone example directories:
 - `examples/usage_guide_example/`
 - `examples/journal_paper_example/`
 
-Each directory is meant to be understandable on its own and executable as a regular script:
+Run them directly:
 
 ```powershell
 python .\examples\usage_guide_example\main.py
 python .\examples\journal_paper_example\main.py
 ```
 
-The usage-guide example demonstrates the core authoring model, generated pages, inline actions, and asset-backed figures.
-The journal-paper example demonstrates a more realistic submission workflow with abstract, highlights, acknowledgements, CSV-backed tables, and a matplotlib figure inserted directly from a live Python object.
+What they show:
 
-By default they write these files under `artifacts/usage-guide/` and `artifacts/journal-paper/` respectively.
-Both examples are covered by automated tests so the generated outputs stay exercised continuously.
+- `usage_guide_example` is a detailed guide that keeps almost all assembly in one `main.py` so the source stays easy to read
+- `journal_paper_example` shows a longer manuscript-style workflow with article-style sections, unnumbered abstract/highlights/acknowledgements, CSV-backed tables, and matplotlib figures inserted directly from Python objects
+
+By default they write outputs under:
+
+- `artifacts/usage-guide/`
+- `artifacts/journal-paper/`
+
+## Project Layout
+
+The package is organized by responsibility:
+
+- `src/docscriptor/document.py` for the root `Document`
+- `src/docscriptor/blocks.py` for structural and block-level objects
+- `src/docscriptor/inline.py` for inline fragments and action-style helpers
+- `src/docscriptor/tables.py` for tables, table cells, dataframe support, and figures
+- `src/docscriptor/styles.py` for paragraph, numbering, table, box, and theme configuration
+- `src/docscriptor/references.py` for bibliography objects and BibTeX import
+- `src/docscriptor/renderers/docx.py` and `src/docscriptor/renderers/pdf.py` for format-specific layout
 
 ## Development
 
-Assuming Python 3.14 is already installed on the machine, run the repository setup helper:
+Assuming Python 3.14 is installed:
 
 ```powershell
 .\scripts\setup-repo.cmd
 ```
 
-If you prefer to run the PowerShell script directly, use a one-off execution policy bypass for the current invocation:
+Or:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\setup-repo.ps1
 ```
 
-The script will:
-
-- find Python 3.14
-- create or reuse `.venv`
-- upgrade `pip`
-- install the project in editable mode with `dev` dependencies, including `pandas` and `matplotlib` for the example scripts
-
-To activate the virtual environment manually after setup:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-## VS Code
-
-This repository commits workspace settings for VS Code.
-After running `.\scripts\setup-repo.cmd`, opening the folder in VS Code should pick `.venv` as the default interpreter and enable pytest discovery for the `tests` folder.
-
-Run the test suite:
+Run tests:
 
 ```powershell
 pytest

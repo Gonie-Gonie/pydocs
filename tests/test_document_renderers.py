@@ -215,7 +215,7 @@ def _docx_document_xml(docx_path: Path) -> str:
 def test_version_is_defined() -> None:
     from docscriptor import __version__
 
-    assert __version__ == "0.1.0"
+    assert __version__ == "0.2.0"
 
 
 def test_markup_creates_styled_fragments() -> None:
