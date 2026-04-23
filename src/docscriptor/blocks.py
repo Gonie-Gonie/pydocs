@@ -138,7 +138,7 @@ class CodeBlock(Block):
     code: str
     language: str | None = None
     style: ParagraphStyle = field(
-        default_factory=lambda: ParagraphStyle(space_after=12.0)
+        default_factory=lambda: ParagraphStyle(alignment="left", space_after=12.0)
     )
 
     def render_to_docx(
@@ -464,6 +464,11 @@ class Section(Block):
             context,
             number_label=(
                 context.render_index.heading_number(self)
+                if self.numbered
+                else None
+            ),
+            anchor=(
+                context.render_index.heading_anchor(self)
                 if self.numbered
                 else None
             ),

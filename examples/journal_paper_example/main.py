@@ -14,13 +14,13 @@ from docscriptor import (
     Document,
     Figure,
     Paragraph,
-    ParagraphStyle,
     ReferencesPage,
     Section,
     Table,
     TableStyle,
-    Text,
     Theme,
+    code,
+    italic,
 )
 
 matplotlib.use("Agg")
@@ -91,27 +91,28 @@ def build_journal_paper_document() -> Document:
     manuscript_sources = CitationLibrary(
         [
             CitationSource(
-                "Benchmark protocol for reproducible scientific reporting",
-                key="benchmark-protocol",
-                organization="Open Research Consortium",
-                year="2025",
-                url="https://example.org/benchmark-protocol",
+                "Literate Programming",
+                key="literate-programming",
+                authors=("D. E. Knuth",),
+                publisher="The Computer Journal",
+                year="1984",
+                url="https://doi.org/10.1093/comjnl/27.2.97",
             ),
             CitationSource(
-                "Document automation workflows in applied research teams",
-                key="automation-survey",
-                authors=("A. Park", "J. Singh"),
-                publisher="Practical Research Systems",
-                year="2024",
-                url="https://example.org/automation-survey",
+                "Statistical Analyses and Reproducible Research",
+                key="reproducible-research",
+                authors=("Robert Gentleman", "Duncan Temple Lang"),
+                publisher="Journal of Computational and Graphical Statistics",
+                year="2007",
+                url="https://doi.org/10.1198/106186007X178663",
             ),
             CitationSource(
-                "Human-in-the-loop review for technical documentation",
-                key="review-study",
-                authors=("M. Chen", "S. Ito"),
-                publisher="Applied Workflow Journal",
-                year="2023",
-                url="https://example.org/review-study",
+                "knitr: A General-Purpose Package for Dynamic Report Generation in R",
+                key="knitr",
+                authors=("Yihui Xie",),
+                publisher="Official project site",
+                year="2026",
+                url="https://yihui.org/knitr/",
             ),
         ]
     )
@@ -167,30 +168,22 @@ def build_journal_paper_document() -> Document:
 
     return Document(
         "A Python-Native Workflow for Reproducible Journal Manuscripts",
-        Paragraph(
-            "Jiyoon Kim, Minho Lee, and Sujin Park",
-            style=ParagraphStyle(alignment="center", space_after=4),
-        ),
-        Paragraph(
-            Text.italic("Department of Computational Publishing, Seoul"),
-            style=ParagraphStyle(alignment="center", space_after=16),
-        ),
         Section(
             "Abstract",
             Paragraph(
                 "This example models a journal submission workflow where prose, tables, and figures are assembled from ordinary Python code. Benchmark tables are loaded from CSV files with ",
-                Text.code("pandas.read_csv"),
+                code("pandas.read_csv"),
                 ", plots are created with ",
-                Text.code("matplotlib"),
+                code("matplotlib"),
                 ", and both DOCX and PDF outputs are rendered from the same source document. The workflow follows the reporting discipline described in ",
-                manuscript_sources.cite("benchmark-protocol"),
+                manuscript_sources.cite("reproducible-research"),
                 ".",
             ),
             Paragraph(
                 "The main goal is not a novel layout engine but a practical authoring pattern for research groups that already manage experimental data in scripts. By keeping analysis inputs, figure generation, and manuscript assembly in one language, the risk of stale tables and copied captions is substantially reduced.",
             ),
             Paragraph(
-                Text.italic("Keywords: "),
+                italic("Keywords: "),
                 "scientific reporting, document automation, reproducible workflows, Python",
             ),
             level=2,
@@ -216,9 +209,9 @@ def build_journal_paper_document() -> Document:
             ),
             Paragraph(
                 "The broader motivation also aligns with practical automation patterns discussed in ",
-                manuscript_sources.cite("automation-survey"),
-                " and with review-aware documentation processes such as ",
-                manuscript_sources.cite("review-study"),
+                manuscript_sources.cite("literate-programming"),
+                " and with reproducible document systems such as ",
+                manuscript_sources.cite("knitr"),
                 ".",
             ),
             level=1,
@@ -250,7 +243,7 @@ def build_journal_paper_document() -> Document:
                 "Data Integration",
                 Paragraph(
                     "The benchmark and ablation tables below are loaded from CSV files into DataFrames before being passed directly into ",
-                    Text.code("Table.from_dataframe(...)"),
+                    code("Table.from_dataframe(...)"),
                     ". The performance plots are produced from the same DataFrames and inserted as live matplotlib figure objects."
                 ),
                 Paragraph(
@@ -357,6 +350,8 @@ def build_journal_paper_document() -> Document:
         ReferencesPage(),
         author="Jiyoon Kim; Minho Lee; Sujin Park",
         summary="Journal-style example manuscript",
+        authors=["Jiyoon Kim, Minho Lee, and Sujin Park"],
+        affiliations=["Department of Computational Publishing, Seoul"],
         theme=Theme(page_number_format="{page}"),
         citations=manuscript_sources,
     )

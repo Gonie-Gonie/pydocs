@@ -186,7 +186,10 @@ class Theme:
     title_font_size: float = 22.0
     body_font_size: float = 11.0
     heading_sizes: tuple[float, ...] = (18.0, 15.0, 13.0, 11.5)
-    caption_font_size: float = 9.0
+    caption_font_size: float | None = None
+    caption_alignment: str = "left"
+    table_caption_position: str = "above"
+    figure_caption_position: str = "below"
     table_label: str = "Table"
     figure_label: str = "Figure"
     list_of_tables_title: str = "List of Tables"
@@ -196,10 +199,17 @@ class Theme:
     references_title: str = "References"
     contents_title: str = "Contents"
     generated_section_level: int = 2
+    generated_page_breaks: bool = True
     show_page_numbers: bool = False
     page_number_alignment: str = "center"
     page_number_format: str = "{page}"
+    front_matter_page_number_format: str = "lower-roman"
+    main_matter_page_number_format: str = "decimal"
     page_number_font_size: float = 9.0
+    title_alignment: str = "center"
+    subtitle_alignment: str = "left"
+    author_alignment: str = "left"
+    affiliation_alignment: str = "left"
     heading_numbering: HeadingNumbering = field(default_factory=HeadingNumbering)
     bullet_list_style: ListStyle = field(
         default_factory=lambda: ListStyle(marker_format="bullet", suffix="")
@@ -207,12 +217,39 @@ class Theme:
     numbered_list_style: ListStyle = field(default_factory=ListStyle)
 
     def __post_init__(self) -> None:
+        if self.caption_alignment not in {"left", "center", "right", "justify"}:
+            raise ValueError(
+                f"Unsupported caption alignment: {self.caption_alignment!r}"
+            )
+        if self.table_caption_position not in {"above", "below"}:
+            raise ValueError(
+                "table_caption_position must be 'above' or 'below'"
+            )
+        if self.figure_caption_position not in {"above", "below"}:
+            raise ValueError(
+                "figure_caption_position must be 'above' or 'below'"
+            )
         if self.page_number_alignment not in {"left", "center", "right"}:
             raise ValueError(
                 f"Unsupported page number alignment: {self.page_number_alignment!r}"
             )
+        self.front_matter_page_number_format = normalize_counter_format(
+            self.front_matter_page_number_format
+        )
+        self.main_matter_page_number_format = normalize_counter_format(
+            self.main_matter_page_number_format
+        )
         if "{page}" not in self.page_number_format:
             raise ValueError("page_number_format must contain a '{page}' placeholder")
+        for field_name in (
+            "title_alignment",
+            "subtitle_alignment",
+            "author_alignment",
+            "affiliation_alignment",
+        ):
+            value = getattr(self, field_name)
+            if value not in {"left", "center", "right", "justify"}:
+                raise ValueError(f"Unsupported alignment for {field_name}: {value!r}")
 
     def heading_size(self, level: int) -> float:
         """Return the configured font size for a heading level."""
@@ -235,12 +272,28 @@ class Theme:
     def heading_alignment(self, level: int) -> str:
         """Return the alignment to use for the given heading level."""
 
-        return "center" if level == 1 else "left"
+        return "left"
 
-    def format_page_number(self, page_number: int) -> str:
+    def caption_size(self) -> float:
+        """Return the effective caption font size."""
+
+        return self.body_font_size if self.caption_font_size is None else self.caption_font_size
+
+    def format_page_number(
+        self,
+        page_number: int,
+        *,
+        front_matter: bool = False,
+    ) -> str:
         """Render the footer page number string for a page."""
 
-        return self.page_number_format.format(page=page_number)
+        marker_format = (
+            self.front_matter_page_number_format
+            if front_matter
+            else self.main_matter_page_number_format
+        )
+        page_label = format_counter_value(page_number, marker_format)
+        return self.page_number_format.format(page=page_label)
 
     def format_heading_label(self, counters: Sequence[int]) -> str | None:
         """Render a heading numbering label for nested section counters."""

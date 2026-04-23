@@ -15,7 +15,17 @@ from reportlab.lib.units import inch
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Image as RLImage
-from reportlab.platypus import KeepTogether, PageBreak, Paragraph as RLParagraph, Preformatted, SimpleDocTemplate, Spacer, Table as RLTable, TableStyle
+from reportlab.platypus import (
+    Flowable,
+    KeepTogether,
+    PageBreak,
+    Paragraph as RLParagraph,
+    Preformatted,
+    SimpleDocTemplate,
+    Spacer,
+    Table as RLTable,
+    TableStyle,
+)
 
 from docscriptor.blocks import (
     Box,
@@ -41,6 +51,7 @@ from docscriptor.inline import (
     Citation,
     Comment,
     Footnote,
+    Hyperlink,
     Math,
     Text,
 )
@@ -110,6 +121,32 @@ SYSTEM_FONT_VARIANTS = {
 }
 
 
+class PageNumberTransition(Flowable):
+    """Invisible flowable that marks the beginning of a new page-numbering mode."""
+
+    def __init__(self, mode: str) -> None:
+        super().__init__()
+        self.mode = mode
+
+    def wrap(self, available_width: float, available_height: float) -> tuple[float, float]:
+        return (0, 0)
+
+    def draw(self) -> None:
+        return None
+
+
+class DocscriptorPdfTemplate(SimpleDocTemplate):
+    """SimpleDocTemplate with page-number mode transitions."""
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        self.main_matter_start_page: int | None = None
+
+    def afterFlowable(self, flowable: Flowable) -> None:
+        if isinstance(flowable, PageNumberTransition) and flowable.mode == "main":
+            self.main_matter_start_page = self.page + 1
+
+
 class PdfRenderer:
     """Render docscriptor documents into PDF files."""
 
@@ -122,7 +159,12 @@ class PdfRenderer:
         path = Path(output_path)
         path.parent.mkdir(parents=True, exist_ok=True)
 
-        pdf = SimpleDocTemplate(str(path), pagesize=A4, title=document.title, author=document.author)
+        pdf = DocscriptorPdfTemplate(
+            str(path),
+            pagesize=A4,
+            title=document.title,
+            author=document.author,
+        )
         story: list[object] = []
         styles = getSampleStyleSheet()
         render_index = build_render_index(document)
@@ -132,34 +174,27 @@ class PdfRenderer:
             styles=styles,
         )
 
-        title_style = RLParagraphStyle(
-            "DocscriptorTitle",
-            parent=styles["Title"],
-            fontName=self._resolve_font(document.theme.body_font_name, True, False),
-            fontSize=document.theme.title_font_size,
-            leading=document.theme.title_font_size * 1.2,
-            spaceAfter=18,
-            alignment=TA_CENTER,
-            textColor=colors.black,
-        )
-        story.append(
-            RLParagraph(
-                self._inline_markup(
-                    [Text(document.title)],
-                    document.theme,
-                    render_index,
-                    base_font_name=title_style.fontName,
-                    base_size=title_style.fontSize,
-                    base_bold=True,
-                    base_italic=False,
-                ),
-                title_style,
-            )
-        )
-        story.extend(document.body.render_to_pdf(self, context))
+        front_children, main_children = document.split_top_level_children()
+        has_front_matter = document.cover_page or bool(front_children)
+
+        story.extend(self._render_title_matter(document, context))
+        if document.cover_page and front_children:
+            story.append(PageBreak())
+
+        story.extend(self._render_top_level_children(front_children, context))
+        if has_front_matter and main_children:
+            story.append(PageNumberTransition("main"))
+            if story and not isinstance(story[-2] if len(story) > 1 else None, PageBreak):
+                story.append(PageBreak())
+            story.extend(self._render_top_level_children(main_children, context))
+        elif not has_front_matter:
+            story.extend(self._render_top_level_children(main_children, context))
 
         if document.theme.show_page_numbers:
-            page_callback = self._page_number_callback(document.theme)
+            page_callback = self._page_number_callback(
+                document.theme,
+                has_front_matter=has_front_matter,
+            )
             pdf.build(story, onFirstPage=page_callback, onLaterPages=page_callback)
         else:
             pdf.build(story)
@@ -188,7 +223,8 @@ class PdfRenderer:
             textColor=colors.black,
         )
         return RLParagraph(
-            self._inline_markup(
+            self._anchor_markup(render_index.heading_anchor(block))
+            + self._inline_markup(
                 self._heading_fragments(
                     block.title,
                     render_index.heading_number(block),
@@ -401,6 +437,121 @@ class PdfRenderer:
 
         return block.render_to_pdf(self, context)
 
+    def _render_top_level_children(
+        self,
+        children: list[object],
+        context: PdfRenderContext,
+    ) -> list[object]:
+        story: list[object] = []
+        for index, child in enumerate(children):
+            if self._is_paginated_generated_page(child) and context.theme.generated_page_breaks:
+                if story and not isinstance(story[-1], PageBreak):
+                    story.append(PageBreak())
+                story.extend(child.render_to_pdf(self, context))
+                if index < len(children) - 1:
+                    story.append(PageBreak())
+                continue
+            story.extend(child.render_to_pdf(self, context))
+        return story
+
+    def _render_title_matter(
+        self,
+        document: Document,
+        context: PdfRenderContext,
+    ) -> list[object]:
+        theme = context.theme
+        styles = context.styles
+        story: list[object] = [
+            self._title_paragraph(
+                [Text(document.title)],
+                theme,
+                styles,
+                style_name="DocscriptorTitle",
+                font_size=theme.title_font_size,
+                alignment=theme.title_alignment,
+                bold=True,
+                space_after=18,
+            )
+        ]
+        if document.subtitle is not None:
+            story.append(
+                self._title_paragraph(
+                    document.subtitle,
+                    theme,
+                    styles,
+                    style_name="DocscriptorSubtitle",
+                    font_size=max(theme.body_font_size + 1, 12),
+                    alignment=theme.subtitle_alignment,
+                    italic=True,
+                    space_after=12,
+                )
+            )
+        for author_line in document.authors:
+            story.append(
+                self._title_paragraph(
+                    author_line,
+                    theme,
+                    styles,
+                    style_name="DocscriptorAuthor",
+                    font_size=theme.body_font_size,
+                    alignment=theme.author_alignment,
+                    space_after=4,
+                )
+            )
+        for index, affiliation_line in enumerate(document.affiliations):
+            story.append(
+                self._title_paragraph(
+                    affiliation_line,
+                    theme,
+                    styles,
+                    style_name="DocscriptorAffiliation",
+                    font_size=max(theme.body_font_size - 0.5, 9),
+                    alignment=theme.affiliation_alignment,
+                    italic=True,
+                    space_after=12 if index == len(document.affiliations) - 1 else 3,
+                )
+            )
+        return story
+
+    def _title_paragraph(
+        self,
+        fragments: list[Text],
+        theme: Theme,
+        styles: object,
+        *,
+        style_name: str,
+        font_size: float,
+        alignment: str,
+        bold: bool = False,
+        italic: bool = False,
+        space_after: float = 0,
+    ) -> RLParagraph:
+        paragraph_style = RLParagraphStyle(
+            style_name,
+            parent=styles["BodyText"],
+            fontName=self._resolve_font(theme.body_font_name, bold, italic),
+            fontSize=font_size,
+            leading=font_size * 1.2,
+            alignment=ALIGNMENTS[alignment],
+            spaceAfter=space_after,
+            textColor=colors.black,
+        )
+        return RLParagraph(
+            self._inline_markup(
+                fragments,
+                theme,
+                RenderIndex(),
+                base_font_name=paragraph_style.fontName,
+                base_size=paragraph_style.fontSize,
+                base_bold=bold,
+                base_italic=italic,
+            ),
+            paragraph_style,
+        )
+
+    def _is_paginated_generated_page(self, block: object) -> bool:
+        return isinstance(block, (TableList, FigureList, TableOfContents))
+
     def _paragraph_style(self, style: ParagraphStyle, theme: Theme, base_style: RLParagraphStyle) -> RLParagraphStyle:
         return RLParagraphStyle(
             f"Paragraph{style.alignment}{style.space_after}{style.leading}",
@@ -507,20 +658,48 @@ class PdfRenderer:
         table = RLTable(table_rows, colWidths=column_widths, hAlign="LEFT")
         table.setStyle(TableStyle(style_commands))
 
-        story: list[object] = [table]
-        if block.caption is not None:
+        story: list[object] = []
+        if block.caption is not None and theme.table_caption_position == "above":
             caption_style = RLParagraphStyle(
                 "TableCaption",
                 parent=body_style,
-                fontSize=theme.caption_font_size,
-                alignment=TA_CENTER,
+                fontSize=theme.caption_size(),
+                alignment=ALIGNMENTS[theme.caption_alignment],
+                spaceBefore=0,
+                spaceAfter=6,
+            )
+            story.append(
+                RLParagraph(
+                    self._anchor_markup(render_index.table_anchor(block))
+                    + self._inline_markup(
+                        self._caption_fragments(theme.table_label, render_index.table_number(block), block.caption),
+                        theme,
+                        render_index,
+                        base_font_name=caption_style.fontName,
+                        base_size=caption_style.fontSize,
+                    ),
+                    caption_style,
+                )
+            )
+        story.append(table)
+        if block.caption is not None and theme.table_caption_position == "below":
+            caption_style = RLParagraphStyle(
+                "TableCaption",
+                parent=body_style,
+                fontSize=theme.caption_size(),
+                alignment=ALIGNMENTS[theme.caption_alignment],
                 spaceBefore=6,
                 spaceAfter=12,
             )
             story.append(
                 RLParagraph(
-                    self._inline_markup(
-                        self._caption_fragments(theme.table_label, render_index.table_number(block), block.caption),
+                    self._anchor_markup(render_index.table_anchor(block))
+                    + self._inline_markup(
+                        self._caption_fragments(
+                            theme.table_label,
+                            render_index.table_number(block),
+                            block.caption,
+                        ),
                         theme,
                         render_index,
                         base_font_name=caption_style.fontName,
@@ -662,7 +841,8 @@ class PdfRenderer:
                 "CodeBlockLabel",
                 parent=styles["BodyText"],
                 fontName=self._resolve_font(theme.monospace_font_name, True, False),
-                fontSize=theme.caption_font_size,
+                fontSize=theme.caption_size(),
+                alignment=TA_LEFT,
                 spaceAfter=2,
             )
             elements.append(RLParagraph(escape(block.language.upper()), label_style))
@@ -703,18 +883,41 @@ class PdfRenderer:
 
         body_style = self._paragraph_style(ParagraphStyle(space_after=0), theme, styles["BodyText"])
         elements: list[object] = [image]
-        if block.caption is not None:
+        if block.caption is not None and theme.figure_caption_position == "above":
             caption_style = RLParagraphStyle(
                 "FigureCaption",
                 parent=body_style,
-                fontSize=theme.caption_font_size,
-                alignment=TA_CENTER,
+                fontSize=theme.caption_size(),
+                alignment=ALIGNMENTS[theme.caption_alignment],
+                spaceBefore=0,
+                spaceAfter=6,
+            )
+            elements = [
+                RLParagraph(
+                    self._anchor_markup(render_index.figure_anchor(block))
+                    + self._inline_markup(
+                        self._caption_fragments(theme.figure_label, render_index.figure_number(block), block.caption),
+                        theme,
+                        render_index,
+                        base_font_name=caption_style.fontName,
+                        base_size=caption_style.fontSize,
+                    ),
+                    caption_style,
+                )
+            ] + elements
+        if block.caption is not None and theme.figure_caption_position == "below":
+            caption_style = RLParagraphStyle(
+                "FigureCaption",
+                parent=body_style,
+                fontSize=theme.caption_size(),
+                alignment=ALIGNMENTS[theme.caption_alignment],
                 spaceBefore=6,
                 spaceAfter=12,
             )
             elements.append(
                 RLParagraph(
-                    self._inline_markup(
+                    self._anchor_markup(render_index.figure_anchor(block))
+                    + self._inline_markup(
                         self._caption_fragments(theme.figure_label, render_index.figure_number(block), block.caption),
                         theme,
                         render_index,
@@ -785,6 +988,48 @@ class PdfRenderer:
         base_bold: bool,
         base_italic: bool,
     ) -> str:
+        if isinstance(fragment, Hyperlink):
+            return self._link_markup(
+                fragment.target,
+                self._inline_markup(
+                    fragment.label,
+                    theme,
+                    render_index,
+                    base_font_name=base_font_name,
+                    base_size=base_size,
+                    base_bold=base_bold,
+                    base_italic=base_italic,
+                ),
+                internal=fragment.internal,
+            )
+        if isinstance(fragment, _BlockReference):
+            return self._link_markup(
+                self._block_reference_anchor(fragment.target, render_index),
+                self._styled_text_markup(
+                    self._resolve_block_reference(fragment.target, theme, render_index),
+                    fragment,
+                    theme,
+                    base_font_name=base_font_name,
+                    base_size=base_size,
+                    base_bold=base_bold,
+                    base_italic=base_italic,
+                ),
+                internal=True,
+            )
+        if isinstance(fragment, Citation):
+            return self._link_markup(
+                render_index.citation_anchor(fragment.target),
+                self._styled_text_markup(
+                    f"[{render_index.citation_number(fragment.target)}]",
+                    fragment,
+                    theme,
+                    base_font_name=base_font_name,
+                    base_size=base_size,
+                    base_bold=base_bold,
+                    base_italic=base_italic,
+                ),
+                internal=True,
+            )
         if isinstance(fragment, Comment):
             visible = self._styled_text_markup(
                 fragment.value,
@@ -919,6 +1164,8 @@ class PdfRenderer:
             return self._resolve_block_reference(fragment.target, theme, render_index)
         if isinstance(fragment, Citation):
             return f"[{render_index.citation_number(fragment.target)}]"
+        if isinstance(fragment, Hyperlink):
+            return fragment.plain_text()
         if isinstance(fragment, Comment):
             return fragment.value
         if isinstance(fragment, Footnote):
@@ -926,6 +1173,32 @@ class PdfRenderer:
         if isinstance(fragment, Math):
             return fragment.plain_text()
         return fragment.value
+
+    def _anchor_markup(self, anchor: str | None) -> str:
+        if not anchor:
+            return ""
+        return f'<a name="{escape(anchor)}"/>'
+
+    def _link_markup(
+        self,
+        target: str | None,
+        inner_markup: str,
+        *,
+        internal: bool,
+    ) -> str:
+        if not target:
+            return inner_markup
+        href = f"#{target}" if internal else target
+        return f'<a href="{escape(href)}">{inner_markup}</a>'
+
+    def _block_reference_anchor(
+        self,
+        target: Table | Figure,
+        render_index: RenderIndex,
+    ) -> str | None:
+        if isinstance(target, Table):
+            return render_index.table_anchor(target)
+        return render_index.figure_anchor(target)
 
     def _resolve_block_reference(self, target: Table | Figure, theme: Theme, render_index: RenderIndex) -> str:
         if isinstance(target, Table):
@@ -985,12 +1258,20 @@ class PdfRenderer:
         for entry in entries:
             story.append(
                 RLParagraph(
-                    self._inline_markup(
-                        self._caption_fragments(label, entry.number, entry.block.caption),
-                        theme,
-                        render_index,
-                        base_font_name=entry_style.fontName,
-                        base_size=entry_style.fontSize,
+                    self._link_markup(
+                        entry.anchor,
+                        self._inline_markup(
+                            self._caption_fragments(
+                                label,
+                                entry.number,
+                                entry.block.caption,
+                            ),
+                            theme,
+                            render_index,
+                            base_font_name=entry_style.fontName,
+                            base_size=entry_style.fontSize,
+                        ),
+                        internal=True,
                     ),
                     entry_style,
                 )
@@ -1168,7 +1449,19 @@ class PdfRenderer:
             ),
         ]
         for entry in render_index.citations:
-            story.append(RLParagraph(escape(f"[{entry.number}] {entry.source.format_reference()}"), entry_style))
+            story.append(
+                RLParagraph(
+                    self._anchor_markup(entry.anchor)
+                    + self._inline_markup(
+                        [Text(f"[{entry.number}] ")] + entry.source.reference_fragments(),
+                        theme,
+                        render_index,
+                        base_font_name=entry_style.fontName,
+                        base_size=entry_style.fontSize,
+                    ),
+                    entry_style,
+                )
+            )
         return story
 
     def _render_table_of_contents(
@@ -1209,21 +1502,30 @@ class PdfRenderer:
             entry_style = RLParagraphStyle(
                 f"TableOfContentsEntry{entry.level}",
                 parent=styles["BodyText"],
-                fontName=self._resolve_font(theme.body_font_name, False, False),
+                fontName=self._resolve_font(
+                    theme.body_font_name,
+                    entry.level == 1,
+                    False,
+                ),
                 fontSize=theme.body_font_size,
                 leading=theme.body_font_size * 1.3,
                 leftIndent=18 * max(entry.level - 1, 0),
-                spaceAfter=3,
+                spaceBefore=4 if entry.level == 1 else 0,
+                spaceAfter=5 if entry.level == 1 else 3,
                 textColor=colors.black,
             )
             story.append(
                 RLParagraph(
-                    self._inline_markup(
-                        self._heading_fragments(entry.title, entry.number),
-                        theme,
-                        render_index,
-                        base_font_name=entry_style.fontName,
-                        base_size=entry_style.fontSize,
+                    self._link_markup(
+                        entry.anchor,
+                        self._inline_markup(
+                            self._heading_fragments(entry.title, entry.number),
+                            theme,
+                            render_index,
+                            base_font_name=entry_style.fontName,
+                            base_size=entry_style.fontSize,
+                        ),
+                        internal=True,
                     ),
                     entry_style,
                 )
@@ -1231,13 +1533,26 @@ class PdfRenderer:
         story.append(Spacer(1, 6))
         return story
 
-    def _page_number_callback(self, theme: Theme):
+    def _page_number_callback(self, theme: Theme, *, has_front_matter: bool):
         font_name = self._resolve_font(theme.body_font_name, False, False)
 
         def draw_page_number(canvas: object, doc: object) -> None:
             canvas.saveState()
             canvas.setFont(font_name, theme.page_number_font_size)
-            text = theme.format_page_number(canvas.getPageNumber())
+            current_page = canvas.getPageNumber()
+            main_start_page = getattr(doc, "main_matter_start_page", None)
+            is_front_matter = has_front_matter and (
+                main_start_page is None or current_page < main_start_page
+            )
+            logical_page = (
+                current_page
+                if is_front_matter or main_start_page is None
+                else current_page - main_start_page + 1
+            )
+            text = theme.format_page_number(
+                logical_page,
+                front_matter=is_front_matter,
+            )
             y = 0.45 * inch
             if theme.page_number_alignment == "left":
                 canvas.drawString(doc.leftMargin, y, text)

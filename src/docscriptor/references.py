@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Sequence
 from docscriptor.core import DocscriptorError
 
 if TYPE_CHECKING:
-    from docscriptor.inline import Citation
+    from docscriptor.inline import Citation, Text
     from docscriptor.styles import TextStyle
 
 
@@ -66,6 +66,42 @@ class CitationSource:
             segments.append(self.note)
         cleaned = [segment.strip().rstrip(".") for segment in segments if segment]
         return ". ".join(cleaned) + "."
+
+    def reference_fragments(self) -> list[Text]:
+        """Return renderer-friendly inline fragments for a reference entry."""
+
+        from docscriptor.inline import Hyperlink, Text
+
+        fragments: list[Text] = []
+        text_segments: list[str] = []
+        if self.authors:
+            text_segments.append(", ".join(self.authors))
+        elif self.organization:
+            text_segments.append(self.organization)
+        text_segments.append(self.title)
+        if self.publisher:
+            text_segments.append(self.publisher)
+        if self.year:
+            text_segments.append(self.year)
+        prefix = ". ".join(
+            segment.strip().rstrip(".")
+            for segment in text_segments
+            if segment
+        )
+        if prefix:
+            fragments.append(Text(f"{prefix}. "))
+        if self.url:
+            fragments.append(Hyperlink.external(self.url, self.url))
+            if self.note:
+                fragments.append(Text(f". {self.note.strip().rstrip('.')}."))
+            else:
+                fragments.append(Text("."))
+            return fragments
+        if self.note:
+            fragments.append(Text(f"{self.note.strip().rstrip('.')}."))
+        elif not fragments:
+            fragments.append(Text(""))
+        return fragments
 
     def cite(self, *, style: TextStyle | None = None) -> Citation:
         """Create an inline citation that points to this source."""

@@ -6,7 +6,9 @@ from io import BytesIO
 from pathlib import Path
 
 from docx import Document as WordDocument
+from docx.enum.section import WD_SECTION
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
@@ -35,11 +37,12 @@ from docscriptor.inline import (
     Citation,
     Comment,
     Footnote,
+    Hyperlink,
     Math,
     Text,
 )
 from docscriptor.renderers.context import DocxRenderContext
-from docscriptor.styles import ParagraphStyle, Theme
+from docscriptor.styles import ParagraphStyle, TextStyle, Theme
 from docscriptor.tables import Figure, Table, build_table_layout
 
 
@@ -62,6 +65,7 @@ class DocxRenderer:
 
         word_document = WordDocument()
         self._initialized_cells: set[int] = set()
+        self._bookmark_id = 1
         render_index = build_render_index(document)
         self._configure_document(word_document, document)
         context = DocxRenderContext(
@@ -69,8 +73,33 @@ class DocxRenderer:
             render_index=render_index,
             word_document=word_document,
         )
-        self.add_heading(word_document, [Text(document.title)], level=0, context=context)
-        document.body.render_to_docx(self, word_document, context)
+        front_children, main_children = document.split_top_level_children()
+        has_front_matter = document.cover_page or bool(front_children)
+
+        self._render_title_matter(
+            word_document,
+            document,
+            context,
+        )
+
+        if document.cover_page and front_children:
+            self._ensure_page_break(word_document)
+
+        if has_front_matter:
+            self._render_top_level_children(word_document, front_children, context)
+            if main_children:
+                word_document.add_section(WD_SECTION.NEW_PAGE)
+                self._render_top_level_children(word_document, main_children, context)
+        else:
+            self._render_top_level_children(word_document, main_children, context)
+
+        if document.theme.show_page_numbers:
+            self._configure_page_number_sections(
+                word_document,
+                document.theme,
+                has_front_matter=has_front_matter,
+                has_main_matter=bool(main_children) or not has_front_matter,
+            )
 
         word_document.save(path)
         return path
@@ -83,6 +112,7 @@ class DocxRenderer:
         context: DocxRenderContext,
         *,
         number_label: str | None = None,
+        anchor: str | None = None,
     ) -> None:
         """Render a heading into the current DOCX container."""
 
@@ -92,6 +122,7 @@ class DocxRenderer:
             level,
             context.theme,
             number_label=number_label,
+            anchor=anchor,
         )
 
     def render_paragraph(
@@ -321,8 +352,6 @@ class DocxRenderer:
                 bold=bold,
                 italic=italic,
             )
-        if document.theme.show_page_numbers:
-            self._add_page_number_footer(word_document, document.theme)
 
     def _render_block(
         self,
@@ -334,6 +363,108 @@ class DocxRenderer:
 
         block.render_to_docx(self, container, context)
 
+    def _render_top_level_children(
+        self,
+        word_document: WordDocument,
+        children: list[object],
+        context: DocxRenderContext,
+    ) -> None:
+        for index, child in enumerate(children):
+            if self._is_paginated_generated_page(child) and context.theme.generated_page_breaks:
+                if word_document.paragraphs and not self._ends_with_page_break(word_document):
+                    self._ensure_page_break(word_document)
+                child.render_to_docx(self, word_document, context)
+                if index < len(children) - 1:
+                    self._ensure_page_break(word_document)
+                continue
+            child.render_to_docx(self, word_document, context)
+
+    def _render_title_matter(
+        self,
+        word_document: WordDocument,
+        document: Document,
+        context: DocxRenderContext,
+    ) -> None:
+        self._add_title_line(
+            word_document,
+            [Text(document.title)],
+            font_size=context.theme.title_font_size,
+            alignment=context.theme.title_alignment,
+            bold=True,
+            space_after=12,
+        )
+        if document.subtitle is not None:
+            self._add_title_line(
+                word_document,
+                document.subtitle,
+                font_size=max(context.theme.body_font_size + 1, 12),
+                alignment=context.theme.subtitle_alignment,
+                italic=True,
+                space_after=10,
+            )
+        for author_line in document.authors:
+            self._add_title_line(
+                word_document,
+                author_line,
+                font_size=context.theme.body_font_size,
+                alignment=context.theme.author_alignment,
+                space_after=4,
+            )
+        for index, affiliation_line in enumerate(document.affiliations):
+            self._add_title_line(
+                word_document,
+                affiliation_line,
+                font_size=max(context.theme.body_font_size - 0.5, 9),
+                alignment=context.theme.affiliation_alignment,
+                italic=True,
+                space_after=10 if index == len(document.affiliations) - 1 else 3,
+            )
+
+    def _add_title_line(
+        self,
+        container: object,
+        fragments: list[Text],
+        *,
+        font_size: float,
+        alignment: str,
+        bold: bool = False,
+        italic: bool = False,
+        space_after: float = 0,
+    ) -> None:
+        paragraph = self._add_paragraph(container)
+        paragraph.alignment = ALIGNMENTS[alignment]
+        paragraph.paragraph_format.space_after = Pt(space_after)
+        for fragment in fragments:
+            run = paragraph.add_run(fragment.plain_text())
+            style = TextStyle(
+                font_size=font_size,
+                bold=bold,
+                italic=italic,
+            ).merged(
+                TextStyle(
+                    font_name=fragment.style.font_name,
+                    font_size=fragment.style.font_size,
+                    color=fragment.style.color,
+                    bold=fragment.style.bold,
+                    italic=fragment.style.italic,
+                    underline=fragment.style.underline,
+                )
+            )
+            self._apply_run_style(run, style, default_size=font_size)
+
+    def _is_paginated_generated_page(self, block: object) -> bool:
+        return isinstance(block, (TableList, FigureList, TableOfContents))
+
+    def _ensure_page_break(self, word_document: WordDocument) -> None:
+        if self._ends_with_page_break(word_document):
+            return
+        word_document.add_page_break()
+
+    def _ends_with_page_break(self, word_document: WordDocument) -> bool:
+        if not word_document.paragraphs:
+            return False
+        return 'w:type="page"' in word_document.paragraphs[-1]._p.xml
+
     def _add_heading(
         self,
         container: object,
@@ -342,11 +473,12 @@ class DocxRenderer:
         theme: Theme,
         *,
         number_label: str | None = None,
+        anchor: str | None = None,
     ) -> None:
         paragraph = self._add_paragraph(container)
         paragraph.style = "Title" if level == 0 else f"Heading {min(level, 9)}"
         if level == 0:
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            paragraph.alignment = ALIGNMENTS[theme.title_alignment]
         else:
             paragraph.alignment = ALIGNMENTS[theme.heading_alignment(level)]
             paragraph.paragraph_format.space_before = Pt(18 if level == 1 else 12)
@@ -357,6 +489,8 @@ class DocxRenderer:
             default_size=theme.title_font_size if level == 0 else theme.heading_size(level),
             theme=theme,
         )
+        if anchor is not None:
+            self._add_bookmark(paragraph, anchor)
 
     def _add_paragraph(self, container: object) -> object:
         if self._is_cell_container(container):
@@ -413,6 +547,37 @@ class DocxRenderer:
         word_document: WordDocument | None = None,
     ) -> None:
         for fragment in fragments:
+            if isinstance(fragment, Hyperlink):
+                self._append_hyperlink_runs(
+                    paragraph,
+                    fragment.target,
+                    fragment.label,
+                    internal=fragment.internal,
+                    style=fragment.style,
+                    default_size=default_size,
+                )
+                continue
+            if isinstance(fragment, _BlockReference) and theme is not None and render_index is not None:
+                anchor = self._block_reference_anchor(fragment.target, render_index)
+                self._append_hyperlink_runs(
+                    paragraph,
+                    anchor,
+                    [Text(self._resolve_block_reference(fragment.target, theme, render_index), style=fragment.style)],
+                    internal=True,
+                    style=fragment.style,
+                    default_size=default_size,
+                )
+                continue
+            if isinstance(fragment, Citation) and render_index is not None:
+                self._append_hyperlink_runs(
+                    paragraph,
+                    render_index.citation_anchor(fragment.target),
+                    [Text(f"[{render_index.citation_number(fragment.target)}]", style=fragment.style)],
+                    internal=True,
+                    style=fragment.style,
+                    default_size=default_size,
+                )
+                continue
             if isinstance(fragment, Comment):
                 self._append_comment_runs(
                     paragraph,
@@ -431,6 +596,77 @@ class DocxRenderer:
                 continue
             run = paragraph.add_run(self._resolve_fragment_text(fragment, theme, render_index))
             self._apply_run_style(run, fragment.style, default_size=default_size)
+
+    def _append_hyperlink_runs(
+        self,
+        paragraph: object,
+        target: str | None,
+        label_fragments: list[Text],
+        *,
+        internal: bool,
+        style: TextStyle,
+        default_size: float | None,
+    ) -> None:
+        if not target:
+            self._append_runs(
+                paragraph,
+                label_fragments,
+                default_size=default_size,
+            )
+            return
+
+        hyperlink = OxmlElement("w:hyperlink")
+        if internal:
+            hyperlink.set(qn("w:anchor"), target)
+        else:
+            relationship_id = paragraph.part.relate_to(
+                target,
+                RT.HYPERLINK,
+                is_external=True,
+            )
+            hyperlink.set(qn("r:id"), relationship_id)
+
+        label_text = "".join(fragment.plain_text() for fragment in label_fragments)
+        run = OxmlElement("w:r")
+        run_properties = OxmlElement("w:rPr")
+        if style.color is not None:
+            color = OxmlElement("w:color")
+            color.set(qn("w:val"), style.color)
+            run_properties.append(color)
+        if style.underline:
+            underline = OxmlElement("w:u")
+            underline.set(qn("w:val"), "single")
+            run_properties.append(underline)
+        run.append(run_properties)
+        text = OxmlElement("w:t")
+        text.text = label_text
+        run.append(text)
+        hyperlink.append(run)
+        paragraph._p.append(hyperlink)
+
+    def _add_bookmark(self, paragraph: object, anchor: str) -> None:
+        bookmark_start = OxmlElement("w:bookmarkStart")
+        bookmark_start.set(qn("w:id"), str(self._bookmark_id))
+        bookmark_start.set(qn("w:name"), anchor)
+        bookmark_end = OxmlElement("w:bookmarkEnd")
+        bookmark_end.set(qn("w:id"), str(self._bookmark_id))
+        insert_index = (
+            1
+            if len(paragraph._p) > 0 and paragraph._p[0].tag == qn("w:pPr")
+            else 0
+        )
+        paragraph._p.insert(insert_index, bookmark_start)
+        paragraph._p.append(bookmark_end)
+        self._bookmark_id += 1
+
+    def _block_reference_anchor(
+        self,
+        target: Table | Figure,
+        render_index: RenderIndex,
+    ) -> str | None:
+        if isinstance(target, Table):
+            return render_index.table_anchor(target)
+        return render_index.figure_anchor(target)
 
     def _apply_run_style(self, run: object, style: object, *, default_size: float | None = None) -> None:
         font = run.font
@@ -526,14 +762,16 @@ class DocxRenderer:
     def _render_code_block(self, container: object, code_block: CodeBlock, theme: Theme) -> None:
         if code_block.language:
             label = self._add_paragraph(container)
+            label.alignment = WD_ALIGN_PARAGRAPH.LEFT
             label.paragraph_format.space_after = Pt(2)
             run = label.add_run(code_block.language.upper())
             run.font.name = theme.monospace_font_name
-            run.font.size = Pt(theme.caption_font_size)
+            run.font.size = Pt(theme.caption_size())
             run.font.bold = True
 
         paragraph = self._add_paragraph(container)
         self._apply_paragraph_style(paragraph, code_block.style)
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
         paragraph.paragraph_format.left_indent = Inches(0.25)
         paragraph.paragraph_format.right_indent = Inches(0.1)
         paragraph.paragraph_format.space_before = Pt(6)
@@ -611,6 +849,30 @@ class DocxRenderer:
         *,
         word_document: WordDocument,
     ) -> None:
+        def render_caption() -> None:
+            if table_block.caption is None:
+                return
+            caption = self._add_paragraph(container)
+            caption.alignment = ALIGNMENTS[theme.caption_alignment]
+            self._append_runs(
+                caption,
+                self._caption_fragments(
+                    theme.table_label,
+                    render_index.table_number(table_block),
+                    table_block.caption,
+                ),
+                default_size=theme.caption_size(),
+                theme=theme,
+                render_index=render_index,
+                word_document=word_document,
+            )
+            anchor = render_index.table_anchor(table_block)
+            if anchor is not None:
+                self._add_bookmark(caption, anchor)
+
+        if table_block.caption is not None and theme.table_caption_position == "above":
+            render_caption()
+
         layout = build_table_layout(table_block.header_rows, table_block.rows)
         table = container.add_table(rows=layout.row_count, cols=layout.column_count)
         table.style = "Table Grid"
@@ -652,17 +914,8 @@ class DocxRenderer:
             self._set_cell_borders(target_cell, table_block.style.border_color, 0.5)
             self._set_cell_padding(target_cell, table_block.style.cell_padding)
 
-        if table_block.caption is not None:
-            caption = self._add_paragraph(container)
-            caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            self._append_runs(
-                caption,
-                self._caption_fragments(theme.table_label, render_index.table_number(table_block), table_block.caption),
-                default_size=theme.caption_font_size,
-                theme=theme,
-                render_index=render_index,
-                word_document=word_document,
-            )
+        if table_block.caption is not None and theme.table_caption_position == "below":
+            render_caption()
 
     def _render_figure(
         self,
@@ -673,23 +926,38 @@ class DocxRenderer:
         *,
         word_document: WordDocument,
     ) -> None:
+        def render_caption() -> None:
+            if figure.caption is None:
+                return
+            caption = self._add_paragraph(container)
+            caption.alignment = ALIGNMENTS[theme.caption_alignment]
+            self._append_runs(
+                caption,
+                self._caption_fragments(
+                    theme.figure_label,
+                    render_index.figure_number(figure),
+                    figure.caption,
+                ),
+                default_size=theme.caption_size(),
+                theme=theme,
+                render_index=render_index,
+                word_document=word_document,
+            )
+            anchor = render_index.figure_anchor(figure)
+            if anchor is not None:
+                self._add_bookmark(caption, anchor)
+
+        if figure.caption is not None and theme.figure_caption_position == "above":
+            render_caption()
+
         paragraph = self._add_paragraph(container)
         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run = paragraph.add_run()
         width = Inches(figure.width_inches) if figure.width_inches is not None else None
         run.add_picture(self._figure_picture_source(figure), width=width)
 
-        if figure.caption is not None:
-            caption = self._add_paragraph(container)
-            caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            self._append_runs(
-                caption,
-                self._caption_fragments(theme.figure_label, render_index.figure_number(figure), figure.caption),
-                default_size=theme.caption_font_size,
-                theme=theme,
-                render_index=render_index,
-                word_document=word_document,
-            )
+        if figure.caption is not None and theme.figure_caption_position == "below":
+            render_caption()
 
     def _set_paragraph_shading(self, paragraph: object, fill: str) -> None:
         paragraph_properties = paragraph._p.get_or_add_pPr()
@@ -757,6 +1025,8 @@ class DocxRenderer:
             if render_index is None:
                 return fragment.plain_text()
             return f"[{render_index.citation_number(fragment.target)}]"
+        if isinstance(fragment, Hyperlink):
+            return fragment.plain_text()
         if isinstance(fragment, Comment):
             return fragment.value
         if isinstance(fragment, Footnote):
@@ -796,13 +1066,14 @@ class DocxRenderer:
         for entry in entries:
             paragraph = word_document.add_paragraph()
             paragraph.paragraph_format.left_indent = Inches(0.25)
-            self._append_runs(
+            anchor = entry.anchor
+            self._append_hyperlink_runs(
                 paragraph,
+                anchor,
                 self._caption_fragments(label, entry.number, entry.block.caption),
-                default_size=theme.caption_font_size,
-                theme=theme,
-                render_index=render_index,
-                word_document=word_document,
+                internal=True,
+                style=TextStyle(),
+                default_size=theme.caption_size(),
             )
 
     def _render_comments_page(
@@ -880,12 +1151,13 @@ class DocxRenderer:
             paragraph.paragraph_format.first_line_indent = Inches(-0.3)
             self._append_runs(
                 paragraph,
-                [Text(f"[{entry.number}] {entry.source.format_reference()}")],
+                [Text(f"[{entry.number}] ")] + entry.source.reference_fragments(),
                 default_size=theme.body_font_size,
                 theme=theme,
                 render_index=render_index,
                 word_document=word_document,
             )
+            self._add_bookmark(paragraph, entry.anchor)
 
     def _render_table_of_contents(
         self,
@@ -898,32 +1170,115 @@ class DocxRenderer:
         for entry in render_index.headings:
             paragraph = word_document.add_paragraph()
             paragraph.paragraph_format.left_indent = Inches(0.2 * max(entry.level - 1, 0))
-            paragraph.paragraph_format.space_after = Pt(3)
-            self._append_runs(
+            paragraph.paragraph_format.space_before = Pt(4 if entry.level == 1 else 0)
+            paragraph.paragraph_format.space_after = Pt(5 if entry.level == 1 else 3)
+            self._append_hyperlink_runs(
                 paragraph,
+                entry.anchor,
                 self._heading_fragments(entry.title, entry.number),
+                internal=True,
+                style=TextStyle(bold=True if entry.level == 1 else None),
                 default_size=theme.body_font_size,
-                theme=theme,
-                render_index=render_index,
-                word_document=word_document,
             )
 
-    def _add_page_number_footer(self, word_document: WordDocument, theme: Theme) -> None:
-        for section in word_document.sections:
-            footer = section.footer
-            paragraph = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
-            paragraph.style = "Footer"
-            paragraph.alignment = ALIGNMENTS[theme.page_number_alignment]
-            for child in list(paragraph._p):
-                if child.tag != qn("w:pPr"):
-                    paragraph._p.remove(child)
-            parts = theme.page_number_format.split("{page}")
-            for index, part in enumerate(parts):
-                if part:
-                    run = paragraph.add_run(part)
-                    self._apply_run_style(run, Text(part).style, default_size=theme.page_number_font_size)
-                if index < len(parts) - 1:
-                    self._append_page_number_field(paragraph)
+    def _configure_page_number_sections(
+        self,
+        word_document: WordDocument,
+        theme: Theme,
+        *,
+        has_front_matter: bool,
+        has_main_matter: bool,
+    ) -> None:
+        sections = list(word_document.sections)
+        if not sections:
+            return
+
+        if has_front_matter:
+            self._set_section_page_number_format(
+                sections[0],
+                theme.front_matter_page_number_format,
+                start=1,
+            )
+            self._add_page_number_footer(
+                sections[0],
+                theme,
+                front_matter=True,
+            )
+            if has_main_matter and len(sections) > 1:
+                sections[1].footer.is_linked_to_previous = False
+                self._set_section_page_number_format(
+                    sections[1],
+                    theme.main_matter_page_number_format,
+                    start=1,
+                )
+                self._add_page_number_footer(
+                    sections[1],
+                    theme,
+                    front_matter=False,
+                )
+            return
+
+        self._set_section_page_number_format(
+            sections[0],
+            theme.main_matter_page_number_format,
+            start=1,
+        )
+        self._add_page_number_footer(
+            sections[0],
+            theme,
+            front_matter=False,
+        )
+
+    def _add_page_number_footer(
+        self,
+        section: object,
+        theme: Theme,
+        *,
+        front_matter: bool,
+    ) -> None:
+        footer = section.footer
+        paragraph = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
+        paragraph.style = "Footer"
+        paragraph.alignment = ALIGNMENTS[theme.page_number_alignment]
+        for child in list(paragraph._p):
+            if child.tag != qn("w:pPr"):
+                paragraph._p.remove(child)
+        parts = theme.page_number_format.split("{page}")
+        for index, part in enumerate(parts):
+            if part:
+                run = paragraph.add_run(part)
+                self._apply_run_style(
+                    run,
+                    Text(part).style,
+                    default_size=theme.page_number_font_size,
+                )
+            if index < len(parts) - 1:
+                self._append_page_number_field(paragraph)
+
+    def _set_section_page_number_format(
+        self,
+        section: object,
+        page_number_format: str,
+        *,
+        start: int = 1,
+    ) -> None:
+        format_map = {
+            "decimal": "decimal",
+            "lower-roman": "lowerRoman",
+            "upper-roman": "upperRoman",
+            "lower-alpha": "lowerLetter",
+            "upper-alpha": "upperLetter",
+        }
+        sect_pr = section._sectPr
+        page_number_type = sect_pr.find(qn("w:pgNumType"))
+        if page_number_type is None:
+            page_number_type = OxmlElement("w:pgNumType")
+            sect_pr.append(page_number_type)
+        page_number_type.set(
+            qn("w:fmt"),
+            format_map.get(page_number_format, "decimal"),
+        )
+        page_number_type.set(qn("w:start"), str(start))
 
     def _append_page_number_field(self, paragraph: object) -> None:
         field = OxmlElement("w:fldSimple")

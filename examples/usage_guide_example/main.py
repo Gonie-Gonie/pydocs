@@ -39,6 +39,11 @@ from docscriptor import (
     TableOfContents,
     Text,
     Theme,
+    bold,
+    code,
+    color,
+    italic,
+    link,
 )
 
 
@@ -156,7 +161,7 @@ def build_usage_guide_document() -> Document:
         rows=[
             ["Structure", "Document, Chapter, Section, Paragraph", "Define the document tree directly in Python."],
             ["Content", "BulletList, NumberedList, CodeBlock, Box, Table, Figure", "Insert readable block-level content."],
-            ["Inline actions", "Text.bold, Text.from_markup, Comment.annotated, Footnote.annotated", "Apply emphasis and annotations explicitly where text is authored."],
+            ["Inline actions", "bold, italic, code, styled, Comment.annotated, Footnote.annotated", "Apply emphasis and annotations explicitly where text is authored."],
         ],
         caption="Core authoring objects by responsibility.",
         column_widths=[1.5, 3.2, 2.0],
@@ -251,23 +256,25 @@ def build_usage_guide_document() -> Document:
                 "What docscriptor is",
                 Paragraph(
                     "Docscriptor is a Python-first document system. You build a document tree with classes such as ",
-                    Text.bold("Document"),
+                    bold("Document"),
                     ", ",
-                    Text.bold("Chapter"),
+                    bold("Chapter"),
                     ", ",
-                    Text.bold("Section"),
+                    bold("Section"),
                     ", and ",
-                    Text.bold("Paragraph"),
+                    bold("Paragraph"),
                     ", then render the same source into DOCX and PDF.",
                 ),
                 Paragraph(
                     "This usage guide is intentionally assembled in one ",
-                    Text.code("main.py"),
+                    code("main.py"),
                     " file. New users should be able to read the output document and then read the code beside it without chasing a large helper hierarchy."
                 ),
                 Paragraph(
                     "The repository itself can be cited directly as ",
                     repository_source.cite(),
+                    ", or linked directly as ",
+                    link("https://github.com/Gonie-Gonie/pydocs", "GitHub repository"),
                     ". That makes it easy to keep project metadata in the same Python source as the manuscript or report."
                 ),
                 rendering_outputs_table,
@@ -276,9 +283,9 @@ def build_usage_guide_document() -> Document:
                 "Quick Start",
                 Paragraph(
                     "The smallest useful workflow is: import the classes you need, compose a document tree, and call ",
-                    Text.code("save_docx(...)"),
+                    code("save_docx(...)"),
                     " and ",
-                    Text.code("save_pdf(...)"),
+                    code("save_pdf(...)"),
                     ".",
                 ),
                 NumberedList(
@@ -296,7 +303,7 @@ def build_usage_guide_document() -> Document:
                 ),
                 Paragraph(
                     "That is the reason this guide keeps the object definitions close to the final ",
-                    Text.code("Document(...)"),
+                    code("Document(...)"),
                     " call. The code is meant to teach the model as much as the rendered document teaches the API."
                 ),
             ),
@@ -307,15 +314,15 @@ def build_usage_guide_document() -> Document:
                 "Structural objects",
                 Paragraph(
                     "A good rule of thumb is: use classes to create things and use methods to perform inline actions. Structural nodes such as ",
-                    Text.code("Document"),
+                    code("Document"),
                     ", ",
-                    Text.code("Chapter"),
+                    code("Chapter"),
                     ", ",
-                    Text.code("Section"),
+                    code("Section"),
                     ", ",
-                    Text.code("Table"),
+                    code("Table"),
                     ", and ",
-                    Text.code("Figure"),
+                    code("Figure"),
                     " are instantiated as objects."
                 ),
                 Paragraph(
@@ -327,19 +334,21 @@ def build_usage_guide_document() -> Document:
                 "Inline actions",
                 Paragraph(
                     "Inline formatting remains explicit. You can write ",
-                    Text.code("Text.bold(...)"),
+                    code("bold(...)"),
                     ", ",
-                    Text.code("Text.italic(...)"),
+                    code("italic(...)"),
                     ", ",
-                    Text.code("Text.code(...)"),
+                    code("code(...)"),
                     ", or ",
-                    Text.code("Text.from_markup(...)"),
+                    code("Text.from_markup(...)"),
                     " directly where the text appears."
                 ),
                 Paragraph(
                     "This sentence mixes ",
                     Text.from_markup("**bold** text, *italic* text, and `code` fragments"),
-                    " in a single paragraph without changing how the surrounding document is assembled.",
+                    ", plus ",
+                    color("colored accents", "#0066AA"),
+                    ", without changing how the surrounding document is assembled.",
                 ),
                 Paragraph(
                     "Portable comments such as ",
@@ -362,17 +371,17 @@ def build_usage_guide_document() -> Document:
                 "Generated pages",
                 Paragraph(
                     "Generated pages are regular block objects. Add ",
-                    Text.code("TableOfContents()"),
+                    code("TableOfContents()"),
                     ", ",
-                    Text.code("TableList()"),
+                    code("TableList()"),
                     ", ",
-                    Text.code("FigureList()"),
+                    code("FigureList()"),
                     ", ",
-                    Text.code("FootnotesPage()"),
+                    code("FootnotesPage()"),
                     ", ",
-                    Text.code("CommentsPage()"),
+                    code("CommentsPage()"),
                     ", or ",
-                    Text.code("ReferencesPage()"),
+                    code("ReferencesPage()"),
                     " where you want them to appear in the document."
                 ),
                 Paragraph(
@@ -390,11 +399,11 @@ def build_usage_guide_document() -> Document:
                 ),
                 Paragraph(
                     "If a specific paragraph should be left-aligned, centered, or right-aligned, override it with ",
-                    Text.code("ParagraphStyle(alignment=...)"),
+                    code("ParagraphStyle(alignment=...)"),
                     ". Spacing can be tuned in the same place with ",
-                    Text.code("space_after"),
+                    code("space_after"),
                     " and ",
-                    Text.code("leading"),
+                    code("leading"),
                     "."
                 ),
                 Paragraph(
@@ -406,24 +415,24 @@ def build_usage_guide_document() -> Document:
                 "Heading and list numbering",
                 Paragraph(
                     "Headings use ",
-                    Text.bold("1"),
+                    bold("1"),
                     ", ",
-                    Text.bold("1.1"),
+                    bold("1.1"),
                     ", and ",
-                    Text.bold("1.1.1"),
+                    bold("1.1.1"),
                     " by default. Ordered lists use ordinary decimal markers such as ",
-                    Text.bold("1."),
+                    bold("1."),
                     " and ",
-                    Text.bold("2."),
+                    bold("2."),
                     "."
                 ),
                 Paragraph(
                     "Both behaviors can be customized. You can change heading counters with ",
-                    Text.code("HeadingNumbering(...)"),
+                    code("HeadingNumbering(...)"),
                     ", list markers with ",
-                    Text.code("ListStyle(...)"),
+                    code("ListStyle(...)"),
                     ", and turn numbering off for article-style front matter with ",
-                    Text.code("Section(..., numbered=False)"),
+                    code("Section(..., numbered=False)"),
                     "."
                 ),
                 numbering_table,
@@ -443,7 +452,7 @@ def build_usage_guide_document() -> Document:
                 "Boxes and grouped content",
                 Paragraph(
                     "A ",
-                    Text.code("Box(...)"),
+                    code("Box(...)"),
                     " is the closest equivalent to a simple LaTeX-style callout container. The goal is stability rather than page-floating behavior, so boxes stay inline and follow the normal document flow."
                 ),
                 Paragraph(
@@ -458,16 +467,16 @@ def build_usage_guide_document() -> Document:
                 "Tables",
                 Paragraph(
                     "Tables can be created directly from headers and rows, or built from dataframe-like objects with ",
-                    Text.code("Table.from_dataframe(...)"),
+                    code("Table.from_dataframe(...)"),
                     ". Table styling lives in ",
-                    Text.code("TableStyle(...)"),
+                    code("TableStyle(...)"),
                     ", and more precise layouts are available through ",
-                    Text.code("TableCell(...)"),
+                    code("TableCell(...)"),
                     " with row and column spans."
                 ),
                 Paragraph(
                     "The journal paper example in ",
-                    Text.code("examples/journal_paper_example/main.py"),
+                    code("examples/journal_paper_example/main.py"),
                     " shows the dataframe route in a more realistic workflow. For this guide, the example stays focused on readability and keeps the tables defined inline."
                 ),
                 table_layout_table,
@@ -477,7 +486,7 @@ def build_usage_guide_document() -> Document:
                 "Figures",
                 Paragraph(
                     "Figures can come from a stored image file or from any Python object that exposes ",
-                    Text.code("savefig()"),
+                    code("savefig()"),
                     ". That makes it easy to insert both pre-made assets and live matplotlib figures."
                 ),
                 Paragraph(
@@ -513,9 +522,9 @@ def build_usage_guide_document() -> Document:
                 ),
                 Paragraph(
                     "Comments work similarly. Use ",
-                    Text.code("Comment.annotated(...)"),
+                    code("Comment.annotated(...)"),
                     " for reviewer-style annotations and add ",
-                    Text.code("CommentsPage()"),
+                    code("CommentsPage()"),
                     " near the end of the document to collect them."
                 ),
             ),
@@ -523,9 +532,9 @@ def build_usage_guide_document() -> Document:
                 "Citations",
                 Paragraph(
                     "Citations can come from direct ",
-                    Text.code("CitationSource(...)"),
+                    code("CitationSource(...)"),
                     " instances or from a small ",
-                    Text.code("CitationLibrary"),
+                    code("CitationLibrary"),
                     ". The direct source route works well for a repository or dataset citation, while a library becomes useful once you have several references to manage."
                 ),
                 Paragraph(
@@ -553,7 +562,7 @@ def build_usage_guide_document() -> Document:
                 "Practical workflow",
                 Paragraph(
                     "A good working pattern is: keep external assets under version control, generate tables and figures from Python when the source data is already in code, and leave static diagrams as regular files in ",
-                    Text.code("assets/"),
+                    code("assets/"),
                     "."
                 ),
                 BulletList(
@@ -594,9 +603,15 @@ def build_usage_guide_document() -> Document:
         ReferencesPage(),
         author="docscriptor examples",
         summary="Detailed usage guide document",
+        subtitle="Detailed usage guide and API walkthrough",
+        authors=["docscriptor examples"],
+        affiliations=[
+            italic("Python-first document authoring toolkit"),
+        ],
+        cover_page=True,
         theme=Theme(
             show_page_numbers=True,
-            page_number_format="Page {page}",
+            page_number_format="{page}",
             heading_numbering=HeadingNumbering(),
         ),
         citations=related_work,

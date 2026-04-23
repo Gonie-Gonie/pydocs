@@ -59,6 +59,8 @@ def test_journal_paper_example_builds_outputs(tmp_path: Path) -> None:
     normalized_pdf_text = " ".join(pdf_text.split())
 
     assert "A Python-Native Workflow for Reproducible Journal Manuscripts" in paragraph_texts
+    assert "Jiyoon Kim, Minho Lee, and Sujin Park" in paragraph_texts
+    assert "Department of Computational Publishing, Seoul" in paragraph_texts
     assert "Abstract" in paragraph_texts
     assert "Highlights" in paragraph_texts
     assert "Acknowledgements" in paragraph_texts
@@ -107,8 +109,10 @@ def test_journal_paper_example_builds_outputs(tmp_path: Path) -> None:
     assert "pandas.read_csv" in pdf_text
     assert "matplotlib" in pdf_text
     assert "benchmark CSV" in pdf_text
-    assert "Open Research Consortium" in pdf_text
-    assert "Practical Research Systems" in normalized_pdf_text
-    assert "Applied Workflow Journal" in normalized_pdf_text
-    assert 6 <= len(pdf_reader.pages) <= 7
+    assert "Literate Programming" in normalized_pdf_text
+    assert "Statistical Analyses and Reproducible Research" in normalized_pdf_text
+    assert "https://doi.org/10.1093/comjnl/27.2.97" in normalized_pdf_text
+    assert "https://doi.org/10.1198/106186007X178663" in normalized_pdf_text
+    assert "https://yihui.org/knitr/" in normalized_pdf_text
+    assert 6 <= len(pdf_reader.pages) <= 8
     assert _pdf_image_draw_count(pdf_path) == 3

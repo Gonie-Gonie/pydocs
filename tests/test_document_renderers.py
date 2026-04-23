@@ -49,9 +49,15 @@ from docscriptor import (
     TableList,
     Text,
     Theme,
+    Hyperlink,
+    bold,
+    code,
+    color,
     cite,
     comment,
     footnote,
+    italic,
+    link,
     math,
     markup,
     styled,
@@ -263,10 +269,19 @@ def test_method_style_inline_actions_create_renderable_fragments() -> None:
     assert Text.bold("important").style.bold is True
     assert Text.italic("note").style.italic is True
     assert Text.code("x = 1").style.font_name == "Courier New"
+    assert Text.color("accent", "#0066AA").style.color == "0066AA"
     assert [fragment.value for fragment in Text.from_markup("plain **bold**")] == [
         "plain ",
         "bold",
     ]
+    assert bold("important").style.bold is True
+    assert italic("note").style.italic is True
+    assert code("x = 1").style.font_name == "Courier New"
+    assert color("accent", "#0066AA").style.color == "0066AA"
+    external_link = link("https://example.com", "Example")
+    assert isinstance(external_link, Hyperlink)
+    assert external_link.target == "https://example.com"
+    assert external_link.plain_text() == "Example"
     assert source.cite().plain_text() == "[?]"
     assert library.cite("guide").plain_text() == "[?]"
     assert Comment.annotated("term", "Expanded note").plain_text() == "term[?]"
@@ -278,6 +293,7 @@ def test_theme_validates_page_number_configuration() -> None:
     theme = Theme(show_page_numbers=True, page_number_format="Page {page}", page_number_alignment="right")
 
     assert theme.format_page_number(3) == "Page 3"
+    assert theme.format_page_number(3, front_matter=True) == "Page iii"
 
     try:
         Theme(page_number_format="Page")
@@ -296,12 +312,12 @@ def test_paragraph_style_defaults_to_justify_alignment() -> None:
 def test_numbering_and_list_styles_are_customizable() -> None:
     heading_numbering = HeadingNumbering(formats=("upper-roman", "lower-alpha"), prefix="[", suffix="]")
     ordered_style = ListStyle(marker_format="upper-roman", prefix="(", suffix=")")
-    bullet_style = ListStyle(marker_format="bullet", bullet="→", suffix="")
+    bullet_style = ListStyle(marker_format="bullet", bullet="•", suffix="")
 
     assert heading_numbering.format_label([2, 3]) == "[II.c]"
     assert ordered_style.marker_for(0) == "(I)"
     assert ordered_style.marker_for(2) == "(III)"
-    assert bullet_style.marker_for(1) == "→"
+    assert bullet_style.marker_for(1) == "•"
 
 
 def test_table_accepts_dataframe_like_inputs_and_spans() -> None:
@@ -375,6 +391,7 @@ def test_public_api_prefers_classes_for_structural_nodes() -> None:
     assert hasattr(docscriptor, "BoxStyle")
     assert hasattr(docscriptor, "Italic")
     assert hasattr(docscriptor, "HeadingNumbering")
+    assert hasattr(docscriptor, "Hyperlink")
     assert hasattr(docscriptor, "ListStyle")
     assert hasattr(docscriptor, "Monospace")
     assert hasattr(docscriptor, "Table")
@@ -398,6 +415,11 @@ def test_public_api_prefers_classes_for_structural_nodes() -> None:
     assert hasattr(docscriptor, "comment")
     assert hasattr(docscriptor, "footnote")
     assert hasattr(docscriptor, "math")
+    assert hasattr(docscriptor, "bold")
+    assert hasattr(docscriptor, "italic")
+    assert hasattr(docscriptor, "code")
+    assert hasattr(docscriptor, "color")
+    assert hasattr(docscriptor, "link")
 
     for removed_name in (
         "document",
@@ -547,13 +569,13 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
                 ),
                 HighlightedParagraph(
                     "The ",
-                    Bold("docscriptor"),
+                    bold("docscriptor"),
                     " pipeline supports ",
-                    Italic("styled"),
+                    italic("styled"),
                     " text, ",
-                    Monospace("code"),
+                    code("code"),
                     ", and ",
-                    styled("custom color", color="#0066AA", bold=True),
+                    color("custom color", "#0066AA", style=docscriptor.TextStyle(bold=True)),
                     ".",
                     style=ParagraphStyle(space_after=14),
                 ),
@@ -606,11 +628,11 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
                     merged_header_table,
                     preview_figure,
                     preview_figure_second,
-                    TableList(),
-                    FigureList(),
                 ),
             ),
         ),
+        TableList(),
+        FigureList(),
         FootnotesPage(),
         CommentsPage(),
         ReferencesPage(),

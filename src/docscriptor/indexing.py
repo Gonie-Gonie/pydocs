@@ -21,7 +21,7 @@ from docscriptor.blocks import (
     TableOfContents,
 )
 from docscriptor.document import Document
-from docscriptor.inline import Citation, Comment, Footnote, Text
+from docscriptor.inline import Citation, Comment, Footnote, Hyperlink, Text
 from docscriptor.references import CitationLibrary, CitationSource
 from docscriptor.styles import Theme
 from docscriptor.tables import Figure, Table
@@ -34,6 +34,7 @@ class CitationReferenceEntry:
 
     number: int
     source: CitationSource
+    anchor: str
 
 
 @dataclass(slots=True)
@@ -59,6 +60,7 @@ class HeadingEntry:
     level: int
     title: list[Text]
     number: str | None = None
+    anchor: str | None = None
 
 
 @dataclass(slots=True)
@@ -67,6 +69,7 @@ class CaptionEntry:
 
     number: int
     block: Table | Figure
+    anchor: str
 
 
 @dataclass(slots=True)
@@ -86,6 +89,7 @@ class RenderIndex:
     footnote_numbers: dict[int, int] = field(default_factory=dict)
     headings: list[HeadingEntry] = field(default_factory=list)
     heading_numbers: dict[int, str] = field(default_factory=dict)
+    heading_anchors: dict[int, str] = field(default_factory=dict)
 
     def table_number(self, table: Table) -> int | None:
         """Return the assigned table number for a captioned table."""
@@ -129,6 +133,32 @@ class RenderIndex:
         """Return the numbering label assigned to a section heading."""
 
         return self.heading_numbers.get(id(target))
+
+    def table_anchor(self, table: Table) -> str | None:
+        """Return the bookmark name for a captioned table."""
+
+        number = self.table_number(table)
+        if number is None:
+            return None
+        return f"table_{number}"
+
+    def figure_anchor(self, figure: Figure) -> str | None:
+        """Return the bookmark name for a captioned figure."""
+
+        number = self.figure_number(figure)
+        if number is None:
+            return None
+        return f"figure_{number}"
+
+    def citation_anchor(self, target: CitationSource | str) -> str:
+        """Return the bookmark name for a cited reference entry."""
+
+        return f"citation_{self.citation_number(target)}"
+
+    def heading_anchor(self, target: Section) -> str | None:
+        """Return the bookmark name for a numbered heading."""
+
+        return self.heading_anchors.get(id(target))
 
 
 def build_render_index(document: Document) -> RenderIndex:
@@ -202,7 +232,11 @@ def _index_blocks(
                         level=block.level,
                         title=block.title,
                         number=number_label,
+                        anchor=f"heading_{len(render_index.headings) + 1}",
                     )
+                )
+                render_index.heading_anchors[id(block)] = (
+                    render_index.headings[-1].anchor or ""
                 )
                 if number_label is not None:
                     render_index.heading_numbers[id(block)] = number_label
@@ -238,14 +272,26 @@ def _index_blocks(
             if block.caption is not None:
                 _index_inlines(block.caption.content, render_index, citations)
                 number = len(render_index.tables) + 1
-                render_index.tables.append(CaptionEntry(number=number, block=block))
+                render_index.tables.append(
+                    CaptionEntry(
+                        number=number,
+                        block=block,
+                        anchor=f"table_{number}",
+                    )
+                )
                 render_index.table_numbers[id(block)] = number
             continue
         if isinstance(block, Figure):
             if block.caption is not None:
                 _index_inlines(block.caption.content, render_index, citations)
                 number = len(render_index.figures) + 1
-                render_index.figures.append(CaptionEntry(number=number, block=block))
+                render_index.figures.append(
+                    CaptionEntry(
+                        number=number,
+                        block=block,
+                        anchor=f"figure_{number}",
+                    )
+                )
                 render_index.figure_numbers[id(block)] = number
 
 
@@ -255,6 +301,9 @@ def _index_inlines(
     citations: CitationLibrary,
 ) -> None:
     for fragment in fragments:
+        if isinstance(fragment, Hyperlink):
+            _index_inlines(fragment.label, render_index, citations)
+            continue
         if isinstance(fragment, Comment):
             _index_inlines(fragment.comment, render_index, citations)
             if id(fragment) in render_index.comment_numbers:
@@ -290,7 +339,11 @@ def _index_inlines(
 
             number = len(render_index.citations) + 1
             render_index.citations.append(
-                CitationReferenceEntry(number=number, source=source)
+                CitationReferenceEntry(
+                    number=number,
+                    source=source,
+                    anchor=f"citation_{number}",
+                )
             )
             render_index.citation_source_numbers[id(source)] = number
             if source.key is not None:

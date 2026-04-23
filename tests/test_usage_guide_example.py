@@ -84,7 +84,7 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert "5 Notes and References" in paragraph_texts
     assert "6 Project Layout" in paragraph_texts
     assert "7 End-to-End Workflow" in paragraph_texts
-    assert any("Text.bold(...)" in text for text in paragraph_texts)
+    assert any("bold(...)" in text for text in paragraph_texts)
     assert any("Text.from_markup(...)" in text for text in paragraph_texts)
     assert any("The repository itself can be cited directly as [1]" in text for text in paragraph_texts)
     assert any("generated comments page" in text for text in paragraph_texts)
@@ -93,9 +93,12 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert any("dx = (" in text and ")/(3)" in text for text in paragraph_texts)
     assert any("This usage guide is intentionally assembled in one main.py file." in text for text in paragraph_texts)
     assert any("The smallest useful workflow is: import the classes you need" in text for text in paragraph_texts)
+    assert "Detailed usage guide and API walkthrough" in paragraph_texts
+    assert "docscriptor examples" in paragraph_texts
+    assert any("Python-first document authoring toolkit" in text for text in paragraph_texts)
     assert "Grouped Content Example" in table_text
     assert any("examples/journal_paper_example/main.py" in text for text in paragraph_texts)
-    assert word_document.sections[0].footer.paragraphs[0].text.startswith("Page ")
+    assert 'w:instr="PAGE"' in word_document.sections[0].footer.paragraphs[0]._p.xml
     assert len(word_document.tables) == 6
     assert len(word_document.inline_shapes) == 2
     assert paragraph_texts.count("Table 1. Rendering goals and output formats.") >= 2
@@ -123,8 +126,9 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert "End-to-End Workflow" in pdf_text
     assert "The repository itself can be cited directly as [1]" in pdf_text
     assert "Portable footnotes stay stable" in pdf_text
-    assert "Text.bold(...)" in pdf_text
+    assert "bold(...)" in pdf_text
     assert "Text.from_markup(...)" in pdf_text
+    assert "colored accents" in pdf_text
     assert "Literate Programming" in pdf_text
     assert "https://github.com/Gonie-Gonie/pydocs" in pdf_text
     assert "This footnote was created from a table cell inside the usage guide." in pdf_text

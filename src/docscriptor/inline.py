@@ -54,6 +54,20 @@ class Text:
         return Monospace(value, style=style)
 
     @classmethod
+    def color(
+        cls,
+        value: str,
+        color: str,
+        style: TextStyle | None = None,
+    ) -> Text:
+        """Create a colored text fragment."""
+
+        return cls(
+            value=value,
+            style=TextStyle(color=color).merged(style),
+        )
+
+    @classmethod
     def from_markup(
         cls,
         source: str,
@@ -142,6 +156,54 @@ def cite(target: CitationSource | str, *, style: TextStyle | None = None) -> Cit
     """Compatibility helper for inline citation creation."""
 
     return Citation.reference(target, style=style)
+
+
+class Hyperlink(Text):
+    """Inline hyperlink to an external URL or internal anchor."""
+
+    __slots__ = ("target", "label", "internal")
+
+    def __init__(
+        self,
+        target: str,
+        *label: InlineInput,
+        internal: bool = False,
+        style: TextStyle | None = None,
+    ) -> None:
+        super().__init__(
+            value="",
+            style=TextStyle(color="0563C1", underline=True).merged(style),
+        )
+        self.target = target
+        self.label = coerce_inlines(label or (target,))
+        self.internal = internal
+
+    def plain_text(self) -> str:
+        """Return the visible hyperlink label."""
+
+        return "".join(fragment.plain_text() for fragment in self.label)
+
+    @classmethod
+    def external(
+        cls,
+        target: str,
+        *label: InlineInput,
+        style: TextStyle | None = None,
+    ) -> Hyperlink:
+        """Create an external hyperlink."""
+
+        return cls(target, *label, internal=False, style=style)
+
+    @classmethod
+    def internal_anchor(
+        cls,
+        target: str,
+        *label: InlineInput,
+        style: TextStyle | None = None,
+    ) -> Hyperlink:
+        """Create an internal hyperlink."""
+
+        return cls(target, *label, internal=True, style=style)
 
 
 class Comment(Text):
@@ -274,6 +336,45 @@ def styled(value: str, **style_values: object) -> Text:
     """Compatibility helper for styled inline text."""
 
     return Text.styled(value, **style_values)
+
+
+def bold(value: str, *, style: TextStyle | None = None) -> Bold:
+    """Compatibility helper for bold inline text."""
+
+    return Text.bold(value, style=style)
+
+
+def italic(value: str, *, style: TextStyle | None = None) -> Italic:
+    """Compatibility helper for italic inline text."""
+
+    return Text.italic(value, style=style)
+
+
+def code(value: str, *, style: TextStyle | None = None) -> Monospace:
+    """Compatibility helper for monospace inline text."""
+
+    return Text.code(value, style=style)
+
+
+def color(
+    value: str,
+    color: str,
+    *,
+    style: TextStyle | None = None,
+) -> Text:
+    """Compatibility helper for colored inline text."""
+
+    return Text.color(value, color, style=style)
+
+
+def link(
+    target: str,
+    *label: InlineInput,
+    style: TextStyle | None = None,
+) -> Hyperlink:
+    """Compatibility helper for hyperlink creation."""
+
+    return Hyperlink.external(target, *label, style=style)
 
 
 InlineInput = Text | str | Sequence["InlineInput"] | None
