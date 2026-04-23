@@ -16,8 +16,10 @@ from docscriptor import (
     Box,
     BoxStyle,
     BulletList,
+    CitationLibrary,
     CitationSource,
     Chapter,
+    Comment,
     CommentsPage,
     CodeBlock,
     Document,
@@ -43,6 +45,7 @@ from docscriptor import (
     TableStyle,
     TableOfContents,
     TableList,
+    Text,
     Theme,
     cite,
     comment,
@@ -249,6 +252,24 @@ def test_comment_and_math_helpers_create_renderable_fragments() -> None:
     assert isinstance(inline_math, Math)
     assert inline_math.plain_text() == "α2 + β2"
     assert equation.plain_text() == "(1)/(2)"
+
+
+def test_method_style_inline_actions_create_renderable_fragments() -> None:
+    source = CitationSource("Usage Guide", key="guide", year="2026")
+    library = CitationLibrary([source])
+
+    assert Text.bold("important").style.bold is True
+    assert Text.italic("note").style.italic is True
+    assert Text.code("x = 1").style.font_name == "Courier New"
+    assert [fragment.value for fragment in Text.from_markup("plain **bold**")] == [
+        "plain ",
+        "bold",
+    ]
+    assert source.cite().plain_text() == "[?]"
+    assert library.cite("guide").plain_text() == "[?]"
+    assert Comment.annotated("term", "Expanded note").plain_text() == "term[?]"
+    assert Footnote.annotated("term", "Portable footnote note").plain_text() == "term[?]"
+    assert Math.inline(r"\alpha^2").plain_text() == "α2"
 
 
 def test_theme_validates_page_number_configuration() -> None:

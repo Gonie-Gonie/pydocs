@@ -11,39 +11,36 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 
-from docscriptor.equations import SUBSCRIPT, SUPERSCRIPT, parse_latex_segments
-from docscriptor.model import (
-    _BlockReference,
-    Body,
+from docscriptor.blocks import (
     Box,
     BulletList,
-    Citation,
-    Comment,
-    CommentsPage,
     CodeBlock,
-    Document,
-    DocscriptorError,
+    CommentsPage,
     Equation,
-    Figure,
     FigureList,
-    Footnote,
     FootnotesPage,
-    Math,
     NumberedList,
     Paragraph,
-    ParagraphStyle,
-    PathLike,
-    RenderIndex,
     ReferencesPage,
     Section,
-    Table,
-    TableOfContents,
     TableList,
-    Text,
-    Theme,
-    build_table_layout,
-    build_render_index,
+    TableOfContents,
 )
+from docscriptor.document import Document
+from docscriptor.equations import SUBSCRIPT, SUPERSCRIPT, parse_latex_segments
+from docscriptor.core import DocscriptorError, PathLike
+from docscriptor.indexing import RenderIndex, build_render_index
+from docscriptor.inline import (
+    _BlockReference,
+    Citation,
+    Comment,
+    Footnote,
+    Math,
+    Text,
+)
+from docscriptor.renderers.context import DocxRenderContext
+from docscriptor.styles import ParagraphStyle, Theme
+from docscriptor.tables import Figure, Table, build_table_layout
 
 
 ALIGNMENTS = {
@@ -67,13 +64,227 @@ class DocxRenderer:
         self._initialized_cells: set[int] = set()
         render_index = build_render_index(document)
         self._configure_document(word_document, document)
-        self._add_heading(word_document, [Text(document.title)], level=0, theme=document.theme)
-
-        for child in document.body.children:
-            self._render_block(word_document, child, document.theme, render_index, word_document=word_document)
+        context = DocxRenderContext(
+            theme=document.theme,
+            render_index=render_index,
+            word_document=word_document,
+        )
+        self.add_heading(word_document, [Text(document.title)], level=0, context=context)
+        document.body.render_to_docx(self, word_document, context)
 
         word_document.save(path)
         return path
+
+    def add_heading(
+        self,
+        container: object,
+        title: list[Text],
+        level: int,
+        context: DocxRenderContext,
+        *,
+        number_label: str | None = None,
+    ) -> None:
+        """Render a heading into the current DOCX container."""
+
+        self._add_heading(
+            container,
+            title,
+            level,
+            context.theme,
+            number_label=number_label,
+        )
+
+    def render_paragraph(
+        self,
+        container: object,
+        paragraph_block: Paragraph,
+        context: DocxRenderContext,
+    ) -> None:
+        """Render a paragraph block into the current DOCX container."""
+
+        paragraph = self._add_paragraph(container)
+        self._apply_paragraph_style(paragraph, paragraph_block.style)
+        self._append_runs(
+            paragraph,
+            paragraph_block.content,
+            theme=context.theme,
+            render_index=context.render_index,
+            word_document=context.word_document,
+        )
+
+    def render_list(
+        self,
+        container: object,
+        list_block: BulletList | NumberedList,
+        context: DocxRenderContext,
+    ) -> None:
+        """Render a list block into the current DOCX container."""
+
+        self._render_list(
+            container,
+            list_block,
+            context.theme,
+            context.render_index,
+            word_document=context.word_document,
+        )
+
+    def render_code_block(
+        self,
+        container: object,
+        code_block: CodeBlock,
+        context: DocxRenderContext,
+    ) -> None:
+        """Render a code block into the current DOCX container."""
+
+        self._render_code_block(container, code_block, context.theme)
+
+    def render_equation(
+        self,
+        container: object,
+        equation: Equation,
+        context: DocxRenderContext,
+    ) -> None:
+        """Render a block equation into the current DOCX container."""
+
+        self._render_equation(container, equation, context.theme)
+
+    def render_box(
+        self,
+        container: object,
+        box: Box,
+        context: DocxRenderContext,
+    ) -> None:
+        """Render a box and its child blocks into the current DOCX container."""
+
+        self._render_box(
+            container,
+            box,
+            context.theme,
+            context.render_index,
+            word_document=context.word_document,
+        )
+
+    def render_comments_page(
+        self,
+        block: CommentsPage,
+        context: DocxRenderContext,
+    ) -> None:
+        """Render the generated comments page into the DOCX document."""
+
+        self._render_comments_page(
+            context.word_document,
+            block.title,
+            context.theme,
+            context.render_index,
+        )
+
+    def render_footnotes_page(
+        self,
+        block: FootnotesPage,
+        context: DocxRenderContext,
+    ) -> None:
+        """Render the generated footnotes page into the DOCX document."""
+
+        self._render_footnotes_page(
+            context.word_document,
+            block.title,
+            context.theme,
+            context.render_index,
+        )
+
+    def render_references_page(
+        self,
+        block: ReferencesPage,
+        context: DocxRenderContext,
+    ) -> None:
+        """Render the generated references page into the DOCX document."""
+
+        self._render_references_page(
+            context.word_document,
+            block.title,
+            context.theme,
+            context.render_index,
+        )
+
+    def render_table_of_contents(
+        self,
+        block: TableOfContents,
+        context: DocxRenderContext,
+    ) -> None:
+        """Render the generated table of contents into the DOCX document."""
+
+        self._render_table_of_contents(
+            context.word_document,
+            block.title,
+            context.theme,
+            context.render_index,
+        )
+
+    def render_table_list(
+        self,
+        block: TableList,
+        context: DocxRenderContext,
+    ) -> None:
+        """Render the generated list of tables into the DOCX document."""
+
+        self._render_caption_list(
+            context.word_document,
+            block.title,
+            context.render_index.tables,
+            context.theme,
+            context.render_index,
+            context.theme.list_of_tables_title,
+            context.theme.table_label,
+        )
+
+    def render_figure_list(
+        self,
+        block: FigureList,
+        context: DocxRenderContext,
+    ) -> None:
+        """Render the generated list of figures into the DOCX document."""
+
+        self._render_caption_list(
+            context.word_document,
+            block.title,
+            context.render_index.figures,
+            context.theme,
+            context.render_index,
+            context.theme.list_of_figures_title,
+            context.theme.figure_label,
+        )
+
+    def render_table(
+        self,
+        container: object,
+        table_block: Table,
+        context: DocxRenderContext,
+    ) -> None:
+        """Render a table block into the current DOCX container."""
+
+        self._render_table(
+            container,
+            table_block,
+            context.theme,
+            context.render_index,
+            word_document=context.word_document,
+        )
+
+    def render_figure(
+        self,
+        container: object,
+        figure: Figure,
+        context: DocxRenderContext,
+    ) -> None:
+        """Render a figure block into the current DOCX container."""
+
+        self._render_figure(
+            container,
+            figure,
+            context.theme,
+            context.render_index,
+            word_document=context.word_document,
+        )
 
     def _configure_document(self, word_document: WordDocument, document: Document) -> None:
         properties = word_document.core_properties
@@ -117,74 +328,11 @@ class DocxRenderer:
         self,
         container: object,
         block: object,
-        theme: Theme,
-        render_index: RenderIndex,
-        *,
-        word_document: WordDocument,
+        context: DocxRenderContext,
     ) -> None:
-        if isinstance(block, Body):
-            for child in block.children:
-                self._render_block(container, child, theme, render_index, word_document=word_document)
-            return
-        if isinstance(block, Section):
-            self._add_heading(
-                container,
-                block.title,
-                block.level,
-                theme,
-                number_label=render_index.heading_number(block),
-            )
-            for child in block.children:
-                self._render_block(container, child, theme, render_index, word_document=word_document)
-            return
-        if isinstance(block, Paragraph):
-            paragraph = self._add_paragraph(container)
-            self._apply_paragraph_style(paragraph, block.style)
-            self._append_runs(paragraph, block.content, theme=theme, render_index=render_index, word_document=word_document)
-            return
-        if isinstance(block, (BulletList, NumberedList)):
-            self._render_list(container, block, theme, render_index, word_document=word_document)
-            return
-        if isinstance(block, CodeBlock):
-            self._render_code_block(container, block, theme)
-            return
-        if isinstance(block, Equation):
-            self._render_equation(container, block, theme)
-            return
-        if isinstance(block, Box):
-            self._render_box(container, block, theme, render_index, word_document=word_document)
-            return
-        if isinstance(block, CommentsPage):
-            self._assert_document_container(container, "CommentsPage")
-            self._render_comments_page(word_document, block.title, theme, render_index)
-            return
-        if isinstance(block, FootnotesPage):
-            self._assert_document_container(container, "FootnotesPage")
-            self._render_footnotes_page(word_document, block.title, theme, render_index)
-            return
-        if isinstance(block, ReferencesPage):
-            self._assert_document_container(container, "ReferencesPage")
-            self._render_references_page(word_document, block.title, theme, render_index)
-            return
-        if isinstance(block, TableOfContents):
-            self._assert_document_container(container, "TableOfContents")
-            self._render_table_of_contents(word_document, block.title, theme, render_index)
-            return
-        if isinstance(block, TableList):
-            self._assert_document_container(container, "TableList")
-            self._render_caption_list(word_document, block.title, render_index.tables, theme, render_index, theme.list_of_tables_title, theme.table_label)
-            return
-        if isinstance(block, FigureList):
-            self._assert_document_container(container, "FigureList")
-            self._render_caption_list(word_document, block.title, render_index.figures, theme, render_index, theme.list_of_figures_title, theme.figure_label)
-            return
-        if isinstance(block, Table):
-            self._render_table(container, block, theme, render_index, word_document=word_document)
-            return
-        if isinstance(block, Figure):
-            self._render_figure(container, block, theme, render_index, word_document=word_document)
-            return
-        raise TypeError(f"Unsupported block type for DOCX rendering: {type(block)!r}")
+        """Delegate block rendering back to the block instance itself."""
+
+        block.render_to_docx(self, container, context)
 
     def _add_heading(
         self,
@@ -225,6 +373,22 @@ class DocxRenderer:
     def _assert_document_container(self, container: object, block_name: str) -> None:
         if self._is_cell_container(container):
             raise DocscriptorError(f"{block_name} cannot be rendered inside a Box")
+
+    def _assert_box_child_supported(self, child: object) -> None:
+        if isinstance(
+            child,
+            (
+                CommentsPage,
+                FootnotesPage,
+                ReferencesPage,
+                TableOfContents,
+                TableList,
+                FigureList,
+            ),
+        ):
+            raise DocscriptorError(
+                f"{type(child).__name__} cannot be rendered inside a Box"
+            )
 
     def _heading_fragments(self, title: list[Text], number_label: str | None) -> list[Text]:
         if not number_label:
@@ -403,7 +567,7 @@ class DocxRenderer:
         render_index: RenderIndex,
         *,
         word_document: WordDocument,
-    ) -> None:
+        ) -> None:
         outer_table = container.add_table(rows=1, cols=1)
         cell = outer_table.rows[0].cells[0]
         cell._tc.clear_content()
@@ -426,8 +590,14 @@ class DocxRenderer:
                 word_document=word_document,
             )
 
+        context = DocxRenderContext(
+            theme=theme,
+            render_index=render_index,
+            word_document=word_document,
+        )
         for child in box.children:
-            self._render_block(cell, child, theme, render_index, word_document=word_document)
+            self._assert_box_child_supported(child)
+            self._render_block(cell, child, context)
 
         if not cell.paragraphs:
             cell.add_paragraph()

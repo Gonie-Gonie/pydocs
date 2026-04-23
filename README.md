@@ -11,18 +11,15 @@ The long-term goal is to compose structured content in scripts, reuse templates 
 
 ## Current Structure
 
-The package now ships with a basic document object model and two renderers:
+The package now ships with a modular document model plus two renderers:
 
-- block objects such as `Document`, `Body`, `Chapter`, `Section`, `Subsection`, `Subsubsection`, `Paragraph`, `CodeBlock`, `Table`, and `Figure`
-- boxed layout blocks such as `Box(...)` for visually grouped content
-- list and generated blocks such as `BulletList`, `NumberedList`, `TableOfContents`, `TableList`, and `FigureList`
-- portable footnotes collected through `footnote(...)` and `FootnotesPage()`
-- object references by reusing `Table` and `Figure` instances directly inside paragraphs
-- table authoring helpers such as `TableCell(...)` and `TableStyle(...)` for merged cells and color control
-- citation helpers such as `cite(...)`, `CitationSource`, `CitationLibrary`, and `ReferencesPage`
-- inline objects such as `Text`, `Bold`, `Italic`, `Monospace`, and `styled(...)`
-- a lightweight `markup(...)` helper for markdown-like inline bold, italic, and code formatting
-- render targets for `.docx` and `.pdf`
+- `document.py` for the root `Document` entry point
+- `blocks.py` for structural and block-level objects such as `Chapter`, `Section`, `Paragraph`, `CodeBlock`, `Box`, and generated pages
+- `inline.py` for inline fragments and content-transforming methods such as `Text.bold(...)`, `Text.from_markup(...)`, `Comment.annotated(...)`, and `Footnote.annotated(...)`
+- `tables.py` for `Table`, `TableCell`, dataframe support, and `Figure`
+- `styles.py` for `TextStyle`, `ParagraphStyle`, `HeadingNumbering`, `ListStyle`, `BoxStyle`, `TableStyle`, and `Theme`
+- `references.py` for `CitationSource`, `CitationLibrary`, and bibliography helpers
+- `renderers/docx.py` and `renderers/pdf.py` for format-specific layout logic driven by each block's `render_to_docx(...)` and `render_to_pdf(...)` methods
 
 ## Authoring Model
 
@@ -34,7 +31,8 @@ The intended workflow is:
 
 Instantiate structural nodes directly with classes such as `Document`, `Chapter`, `Section`, and `Paragraph`.
 That same rule applies to lists, so use `BulletList` and `NumberedList` directly instead of constructor-style wrapper functions.
-The remaining helper functions are reserved for places where they transform content, such as `styled(...)`, `markup(...)`, and `cite(...)`.
+For inline actions, prefer explicit methods when they read well, such as `Text.bold(...)`, `Text.from_markup(...)`, `Comment.annotated(...)`, `Footnote.annotated(...)`, `Math.inline(...)`, or `CitationSource.cite()`.
+The helper functions remain available as short compatibility aliases for the same transformations.
 The default theme uses Times New Roman for body copy and progressively stronger heading treatment for chapter and section levels.
 Headings are numbered by default using labels such as `1`, `1.1`, and `1.1.1`, and both heading numbering and list marker styles can be customized with `HeadingNumbering(...)` and `ListStyle(...)`.
 Captioned tables and figures are numbered automatically, can be cited from prose by reusing the same object instance, and can be collected into generated lists.
@@ -47,13 +45,13 @@ The core model in `docscriptor.model` is intentionally class-based so users can 
 For example, a team can subclass `Paragraph`, `Section`, or `Document` to create house styles, reusable callouts, or report templates.
 
 ```python
-from docscriptor import Bold, Paragraph, ParagraphStyle
+from docscriptor import Paragraph, ParagraphStyle, Text
 
 
 class WarningParagraph(Paragraph):
     def __init__(self, *content):
         super().__init__(
-            Bold("Warning: "),
+            Text.bold("Warning: "),
             *content,
             style=ParagraphStyle(space_after=14),
         )
@@ -77,10 +75,7 @@ from docscriptor import (
     Subsubsection,
     Table,
     TableOfContents,
-    Bold,
-    cite,
-    markup,
-    styled,
+    Text,
 )
 
 metrics_table = Table(
@@ -111,9 +106,9 @@ report = Document(
             "Overview",
             Paragraph(
                 "This document was written in Python with ",
-                styled("custom emphasis", bold=True),
+                Text.styled("custom emphasis", bold=True),
                 " and ",
-                markup("**lightweight** *markup* support."),
+                Text.from_markup("**lightweight** *markup* support."),
             ),
             Paragraph(
                 "See ",
@@ -121,7 +116,7 @@ report = Document(
                 " and ",
                 output_figure,
                 " for the exported assets. Repository metadata appears in ",
-                cite(repository_source),
+                repository_source.cite(),
                 ".",
             ),
             Subsection(
@@ -137,7 +132,7 @@ report = Document(
             ),
             output_figure,
             TableOfContents(),
-            Paragraph(Bold("Rendered inline labels remain easy to spot.")),
+            Paragraph(Text.bold("Rendered inline labels remain easy to spot.")),
             TableList(),
             FigureList(),
             ReferencesPage(),
@@ -149,7 +144,8 @@ report = Document(
 
 ## Example Script
 
-The repository also includes a runnable usage-guide script that documents how to use docscriptor while exercising sections, inline styling, lists, tables, and code blocks:
+The repository includes a package-style usage guide example under `examples/usage_guide_example/`.
+That example keeps its reusable snippets, citations, tables, and bundled assets in separate files while preserving a simple compatibility entrypoint:
 
 ```powershell
 python -m examples.usage_guide
@@ -171,16 +167,8 @@ Assuming Python 3.14 is already installed on the machine, run the repository set
 ```
 
 If you prefer to run the PowerShell script directly, use a one-off execution policy bypass for the current invocation:
-Assuming Python 3.14 is already installed on the machine, run the repository setup helper:
 
 ```powershell
-.\scripts\setup-repo.cmd
-```
-
-If you prefer to run the PowerShell script directly, use a one-off execution policy bypass for the current invocation:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\setup-repo.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\setup-repo.ps1
 ```
 
@@ -200,7 +188,6 @@ To activate the virtual environment manually after setup:
 ## VS Code
 
 This repository commits workspace settings for VS Code.
-After running `.\scripts\setup-repo.cmd`, opening the folder in VS Code should pick `.venv` as the default interpreter and enable pytest discovery for the `tests` folder.
 After running `.\scripts\setup-repo.cmd`, opening the folder in VS Code should pick `.venv` as the default interpreter and enable pytest discovery for the `tests` folder.
 
 Run the test suite:

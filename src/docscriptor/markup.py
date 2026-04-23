@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from docscriptor.model import Bold, Italic, Monospace, Text, TextStyle
+from docscriptor.inline import Bold, Italic, Monospace, Text
+from docscriptor.styles import TextStyle
 
 
 def markup(source: str, *, style: TextStyle | None = None) -> list[Text]:

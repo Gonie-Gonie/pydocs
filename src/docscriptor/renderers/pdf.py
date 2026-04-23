@@ -17,39 +17,36 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Image as RLImage
 from reportlab.platypus import KeepTogether, PageBreak, Paragraph as RLParagraph, Preformatted, SimpleDocTemplate, Spacer, Table as RLTable, TableStyle
 
-from docscriptor.equations import SUBSCRIPT, SUPERSCRIPT, parse_latex_segments
-from docscriptor.model import (
-    _BlockReference,
-    Body,
+from docscriptor.blocks import (
     Box,
     BulletList,
-    Citation,
-    Comment,
-    CommentsPage,
     CodeBlock,
-    Document,
-    DocscriptorError,
+    CommentsPage,
     Equation,
-    Figure,
     FigureList,
-    Footnote,
     FootnotesPage,
-    Math,
     NumberedList,
     Paragraph,
-    ParagraphStyle,
-    PathLike,
-    RenderIndex,
     ReferencesPage,
     Section,
-    Table,
-    TableOfContents,
     TableList,
-    Text,
-    Theme,
-    build_table_layout,
-    build_render_index,
+    TableOfContents,
 )
+from docscriptor.document import Document
+from docscriptor.equations import SUBSCRIPT, SUPERSCRIPT, parse_latex_segments
+from docscriptor.core import DocscriptorError, PathLike
+from docscriptor.indexing import RenderIndex, build_render_index
+from docscriptor.inline import (
+    _BlockReference,
+    Citation,
+    Comment,
+    Footnote,
+    Math,
+    Text,
+)
+from docscriptor.renderers.context import PdfRenderContext
+from docscriptor.styles import ParagraphStyle, Theme
+from docscriptor.tables import Figure, Table, build_table_layout
 
 
 ALIGNMENTS = {
@@ -129,6 +126,11 @@ class PdfRenderer:
         story: list[object] = []
         styles = getSampleStyleSheet()
         render_index = build_render_index(document)
+        context = PdfRenderContext(
+            theme=document.theme,
+            render_index=render_index,
+            styles=styles,
+        )
 
         title_style = RLParagraphStyle(
             "DocscriptorTitle",
@@ -154,9 +156,7 @@ class PdfRenderer:
                 title_style,
             )
         )
-
-        for child in document.body.children:
-            story.extend(self._render_block(child, document.theme, styles, render_index))
+        story.extend(document.body.render_to_pdf(self, context))
 
         if document.theme.show_page_numbers:
             page_callback = self._page_number_callback(document.theme)
@@ -165,81 +165,241 @@ class PdfRenderer:
             pdf.build(story)
         return path
 
-    def _render_block(self, block: object, theme: Theme, styles: object, render_index: RenderIndex) -> list[object]:
-        if isinstance(block, Body):
-            story: list[object] = []
-            for child in block.children:
-                story.extend(self._render_block(child, theme, styles, render_index))
-            return story
-        if isinstance(block, Section):
-            bold, italic = theme.heading_emphasis(block.level)
-            title_style = RLParagraphStyle(
-                f"Heading{block.level}",
-                parent=styles["Heading1"],
-                fontName=self._resolve_font(theme.body_font_name, bold, italic),
-                fontSize=theme.heading_size(block.level),
-                leading=theme.heading_size(block.level) * 1.2,
-                spaceBefore=18 if block.level == 1 else 12,
-                spaceAfter=10 if block.level == 1 else 6,
-                alignment=ALIGNMENTS[theme.heading_alignment(block.level)],
-                textColor=colors.black,
+    def make_section_heading(
+        self,
+        block: Section,
+        context: PdfRenderContext,
+    ) -> RLParagraph:
+        """Build the PDF flowable used for a section heading."""
+
+        theme = context.theme
+        styles = context.styles
+        render_index = context.render_index
+        bold, italic = theme.heading_emphasis(block.level)
+        title_style = RLParagraphStyle(
+            f"Heading{block.level}",
+            parent=styles["Heading1"],
+            fontName=self._resolve_font(theme.body_font_name, bold, italic),
+            fontSize=theme.heading_size(block.level),
+            leading=theme.heading_size(block.level) * 1.2,
+            spaceBefore=18 if block.level == 1 else 12,
+            spaceAfter=10 if block.level == 1 else 6,
+            alignment=ALIGNMENTS[theme.heading_alignment(block.level)],
+            textColor=colors.black,
+        )
+        return RLParagraph(
+            self._inline_markup(
+                self._heading_fragments(
+                    block.title,
+                    render_index.heading_number(block),
+                ),
+                theme,
+                render_index,
+                base_font_name=title_style.fontName,
+                base_size=title_style.fontSize,
+                base_bold=bold,
+                base_italic=italic,
+            ),
+            title_style,
+        )
+
+    def render_paragraph(
+        self,
+        block: Paragraph,
+        context: PdfRenderContext,
+    ) -> list[object]:
+        """Render a paragraph block into PDF flowables."""
+
+        paragraph_style = self._paragraph_style(
+            block.style,
+            context.theme,
+            context.styles["BodyText"],
+        )
+        return [
+            RLParagraph(
+                self._inline_markup(
+                    block.content,
+                    context.theme,
+                    context.render_index,
+                    base_font_name=paragraph_style.fontName,
+                    base_size=paragraph_style.fontSize,
+                ),
+                paragraph_style,
             )
-            story = [
-                RLParagraph(
-                    self._inline_markup(
-                        self._heading_fragments(block.title, render_index.heading_number(block)),
-                        theme,
-                        render_index,
-                        base_font_name=title_style.fontName,
-                        base_size=title_style.fontSize,
-                        base_bold=bold,
-                        base_italic=italic,
-                    ),
-                    title_style,
-                )
-            ]
-            for child in block.children:
-                story.extend(self._render_block(child, theme, styles, render_index))
-            return story
-        if isinstance(block, Paragraph):
-            paragraph_style = self._paragraph_style(block.style, theme, styles["BodyText"])
-            return [
-                RLParagraph(
-                    self._inline_markup(
-                        block.content,
-                        theme,
-                        render_index,
-                        base_font_name=paragraph_style.fontName,
-                        base_size=paragraph_style.fontSize,
-                    ),
-                    paragraph_style,
-                )
-            ]
-        if isinstance(block, (BulletList, NumberedList)):
-            return self._render_list(block, theme, styles, render_index)
-        if isinstance(block, CodeBlock):
-            return self._render_code_block(block, theme, styles)
-        if isinstance(block, Equation):
-            return self._render_equation(block, theme, styles)
-        if isinstance(block, Box):
-            return self._render_box(block, theme, styles, render_index)
-        if isinstance(block, CommentsPage):
-            return self._render_comments_page(block.title, theme, styles, render_index)
-        if isinstance(block, FootnotesPage):
-            return self._render_footnotes_page(block.title, theme, styles, render_index)
-        if isinstance(block, ReferencesPage):
-            return self._render_references_page(block.title, theme, styles, render_index)
-        if isinstance(block, TableOfContents):
-            return self._render_table_of_contents(block.title, theme, styles, render_index)
-        if isinstance(block, TableList):
-            return self._render_caption_list(block.title, render_index.tables, theme, styles, render_index, theme.list_of_tables_title, theme.table_label)
-        if isinstance(block, FigureList):
-            return self._render_caption_list(block.title, render_index.figures, theme, styles, render_index, theme.list_of_figures_title, theme.figure_label)
-        if isinstance(block, Table):
-            return self._render_table(block, theme, styles, render_index)
-        if isinstance(block, Figure):
-            return self._render_figure(block, theme, styles, render_index)
-        raise TypeError(f"Unsupported block type for PDF rendering: {type(block)!r}")
+        ]
+
+    def render_list(
+        self,
+        block: BulletList | NumberedList,
+        context: PdfRenderContext,
+    ) -> list[object]:
+        """Render a list block into PDF flowables."""
+
+        return self._render_list(
+            block,
+            context.theme,
+            context.styles,
+            context.render_index,
+        )
+
+    def render_code_block(
+        self,
+        block: CodeBlock,
+        context: PdfRenderContext,
+    ) -> list[object]:
+        """Render a code block into PDF flowables."""
+
+        return self._render_code_block(block, context.theme, context.styles)
+
+    def render_equation(
+        self,
+        block: Equation,
+        context: PdfRenderContext,
+    ) -> list[object]:
+        """Render a block equation into PDF flowables."""
+
+        return self._render_equation(block, context.theme, context.styles)
+
+    def render_box(
+        self,
+        block: Box,
+        context: PdfRenderContext,
+    ) -> list[object]:
+        """Render a box and its child blocks into PDF flowables."""
+
+        return self._render_box(
+            block,
+            context.theme,
+            context.styles,
+            context.render_index,
+        )
+
+    def render_table(
+        self,
+        block: Table,
+        context: PdfRenderContext,
+    ) -> list[object]:
+        """Render a table block into PDF flowables."""
+
+        return self._render_table(
+            block,
+            context.theme,
+            context.styles,
+            context.render_index,
+        )
+
+    def render_figure(
+        self,
+        block: Figure,
+        context: PdfRenderContext,
+    ) -> list[object]:
+        """Render a figure block into PDF flowables."""
+
+        return self._render_figure(
+            block,
+            context.theme,
+            context.styles,
+            context.render_index,
+        )
+
+    def render_table_list(
+        self,
+        block: TableList,
+        context: PdfRenderContext,
+    ) -> list[object]:
+        """Render the generated list of tables into PDF flowables."""
+
+        return self._render_caption_list(
+            block.title,
+            context.render_index.tables,
+            context.theme,
+            context.styles,
+            context.render_index,
+            context.theme.list_of_tables_title,
+            context.theme.table_label,
+        )
+
+    def render_figure_list(
+        self,
+        block: FigureList,
+        context: PdfRenderContext,
+    ) -> list[object]:
+        """Render the generated list of figures into PDF flowables."""
+
+        return self._render_caption_list(
+            block.title,
+            context.render_index.figures,
+            context.theme,
+            context.styles,
+            context.render_index,
+            context.theme.list_of_figures_title,
+            context.theme.figure_label,
+        )
+
+    def render_comments_page(
+        self,
+        block: CommentsPage,
+        context: PdfRenderContext,
+    ) -> list[object]:
+        """Render the generated comments page into PDF flowables."""
+
+        return self._render_comments_page(
+            block.title,
+            context.theme,
+            context.styles,
+            context.render_index,
+        )
+
+    def render_footnotes_page(
+        self,
+        block: FootnotesPage,
+        context: PdfRenderContext,
+    ) -> list[object]:
+        """Render the generated footnotes page into PDF flowables."""
+
+        return self._render_footnotes_page(
+            block.title,
+            context.theme,
+            context.styles,
+            context.render_index,
+        )
+
+    def render_references_page(
+        self,
+        block: ReferencesPage,
+        context: PdfRenderContext,
+    ) -> list[object]:
+        """Render the generated references page into PDF flowables."""
+
+        return self._render_references_page(
+            block.title,
+            context.theme,
+            context.styles,
+            context.render_index,
+        )
+
+    def render_table_of_contents(
+        self,
+        block: TableOfContents,
+        context: PdfRenderContext,
+    ) -> list[object]:
+        """Render the generated table of contents into PDF flowables."""
+
+        return self._render_table_of_contents(
+            block.title,
+            context.theme,
+            context.styles,
+            context.render_index,
+        )
+
+    def _render_block(
+        self,
+        block: object,
+        context: PdfRenderContext,
+    ) -> list[object]:
+        """Delegate block rendering back to the block instance itself."""
+
+        return block.render_to_pdf(self, context)
 
     def _paragraph_style(self, style: ParagraphStyle, theme: Theme, base_style: RLParagraphStyle) -> RLParagraphStyle:
         return RLParagraphStyle(
@@ -252,6 +412,22 @@ class PdfRenderer:
             alignment=ALIGNMENTS[style.alignment],
             textColor=colors.black,
         )
+
+    def _assert_box_child_supported(self, child: object) -> None:
+        if isinstance(
+            child,
+            (
+                CommentsPage,
+                FootnotesPage,
+                ReferencesPage,
+                TableOfContents,
+                TableList,
+                FigureList,
+            ),
+        ):
+            raise DocscriptorError(
+                f"{type(child).__name__} cannot be rendered inside a Box"
+            )
 
     def _render_table(self, block: Table, theme: Theme, styles: object, render_index: RenderIndex) -> list[object]:
         body_style = self._paragraph_style(ParagraphStyle(space_after=0), theme, styles["BodyText"])
@@ -435,7 +611,13 @@ class PdfRenderer:
                     )
                 )
         for child in block.children:
-            for flowable in self._render_block(child, theme, styles, render_index):
+            self._assert_box_child_supported(child)
+            context = PdfRenderContext(
+                theme=theme,
+                render_index=render_index,
+                styles=styles,
+            )
+            for flowable in self._render_block(child, context):
                 if isinstance(flowable, KeepTogether):
                     rows.extend([[nested]] for nested in flowable._content)
                     continue
