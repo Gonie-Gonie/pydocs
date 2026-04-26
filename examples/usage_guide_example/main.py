@@ -79,6 +79,7 @@ report = Document(
 
 report.save_docx("artifacts/hello.docx")
 report.save_pdf("artifacts/hello.pdf")
+report.save_html("artifacts/hello.html")
 """
 
 NUMBERING_SNIPPET = """from docscriptor import HeadingNumbering, ListStyle, Paragraph, Section, Theme
@@ -151,7 +152,7 @@ def build_usage_guide_document() -> Document:
         rows=[
             ["Editable review", "DOCX", "Works well for tracked changes and collaborator edits."],
             ["Stable distribution", "PDF", "Preserves layout for export and submission."],
-            ["One source of truth", "Both", "The same document tree can render to both outputs."],
+            ["One source of truth", "All", "The same document tree can render to DOCX, PDF, and HTML."],
         ],
         caption="Rendering goals and output formats.",
         column_widths=[1.8, 1.5, 3.0],
@@ -181,7 +182,7 @@ def build_usage_guide_document() -> Document:
                     ),
                     ".",
                 ),
-                "Keeps footnotes stable in both DOCX and PDF.",
+                "Keeps footnotes stable in DOCX, PDF, and HTML.",
             ],
             ["CommentsPage", "Add CommentsPage()", "Exports inline review comments to a dedicated page."],
             ["ReferencesPage", "Add ReferencesPage()", "Only cited bibliography entries are rendered."],
@@ -263,7 +264,7 @@ def build_usage_guide_document() -> Document:
                     bold("Section"),
                     ", and ",
                     bold("Paragraph"),
-                    ", then render the same source into DOCX and PDF.",
+                    ", then render the same source into DOCX, PDF, and HTML.",
                 ),
                 Paragraph(
                     "This usage guide is intentionally assembled in one ",
@@ -286,13 +287,15 @@ def build_usage_guide_document() -> Document:
                     code("save_docx(...)"),
                     " and ",
                     code("save_pdf(...)"),
+                    ", and ",
+                    code("save_html(...)"),
                     ".",
                 ),
                 NumberedList(
                     "Create a Document and give it a title.",
                     "Add Chapter and Section objects to define structure.",
                     "Write prose with Paragraph and inline Text methods.",
-                    "Render the same source into DOCX and PDF.",
+                    "Render the same source into DOCX, PDF, and HTML.",
                 ),
                 CodeBlock(QUICK_START_SNIPPET, language="python"),
             ),
@@ -359,7 +362,7 @@ def build_usage_guide_document() -> Document:
                     ", footnotes such as ",
                     Footnote.annotated(
                         "portable markers",
-                        "Portable footnotes stay stable in DOCX and PDF, including inside table cells.",
+                        "Portable footnotes stay stable in DOCX, PDF, and HTML, including inside table cells.",
                     ),
                     ", and inline math such as ",
                     Math.inline(r"\alpha^2 + \beta^2 = \gamma^2"),
@@ -456,7 +459,7 @@ def build_usage_guide_document() -> Document:
                     " is the closest equivalent to a simple LaTeX-style callout container. The goal is stability rather than page-floating behavior, so boxes stay inline and follow the normal document flow."
                 ),
                 Paragraph(
-                    "That makes them a good place for notes, review checklists, method summaries, or any grouped content that should not jump around between DOCX and PDF outputs."
+                    "That makes them a good place for notes, review checklists, method summaries, or any grouped content that should not jump around between DOCX, PDF, and HTML outputs."
                 ),
                 grouped_content_box,
             ),
@@ -518,7 +521,7 @@ def build_usage_guide_document() -> Document:
                     "Docscriptor uses portable footnotes rather than fragile page-bottom placement. Markers appear inline where the note is referenced, and a generated footnotes page collects the full text."
                 ),
                 Paragraph(
-                    "That approach is especially useful when the same content needs to render to both DOCX and PDF. It avoids the layout edge cases that often appear around tables, figures, and page breaks."
+                    "That approach is especially useful when the same content needs to render to DOCX, PDF, and HTML. It avoids the layout edge cases that often appear around tables, figures, and page breaks."
                 ),
                 Paragraph(
                     "Comments work similarly. Use ",
@@ -581,7 +584,7 @@ def build_usage_guide_document() -> Document:
                     "Define sources, assets, tables, and figures as ordinary Python variables.",
                     "Build the document tree with Chapter, Section, Paragraph, and other block objects.",
                     "Insert generated pages where they should appear.",
-                    "Call save_docx(...) and save_pdf(...).",
+                    "Call save_docx(...), save_pdf(...), and save_html(...).",
                     "Review the rendered outputs and keep the script under version control.",
                 ),
                 Paragraph(
@@ -619,7 +622,7 @@ def build_usage_guide_document() -> Document:
 
 
 def build_usage_guide(output_dir: str | Path) -> tuple[Path, Path]:
-    """Build the usage guide and export it to DOCX and PDF."""
+    """Build the usage guide and export it to DOCX, PDF, and HTML."""
 
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -627,8 +630,10 @@ def build_usage_guide(output_dir: str | Path) -> tuple[Path, Path]:
     document = build_usage_guide_document()
     docx_path = output_path / "docscriptor-usage-guide.docx"
     pdf_path = output_path / "docscriptor-usage-guide.pdf"
+    html_path = output_path / "docscriptor-usage-guide.html"
     document.save_docx(docx_path)
     document.save_pdf(pdf_path)
+    document.save_html(html_path)
     return docx_path, pdf_path
 
 
@@ -636,8 +641,10 @@ def main() -> None:
     """Build the guide into the default example output directory."""
 
     docx_path, pdf_path = build_usage_guide(OUTPUT_DIR)
+    html_path = OUTPUT_DIR / "docscriptor-usage-guide.html"
     print(f"Wrote {docx_path}")
     print(f"Wrote {pdf_path}")
+    print(f"Wrote {html_path}")
 
 
 if __name__ == "__main__":

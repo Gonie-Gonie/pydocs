@@ -25,3 +25,11 @@ class PdfRenderContext:
     theme: Theme
     render_index: RenderIndex
     styles: Any
+
+
+@dataclass(slots=True)
+class HtmlRenderContext:
+    """Context needed while rendering blocks into HTML."""
+
+    theme: Theme
+    render_index: RenderIndex

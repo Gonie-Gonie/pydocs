@@ -1,6 +1,6 @@
 # docscriptor
 
-Docscriptor is a Python-first document authoring toolkit for people who want to define structured documents with normal Python code and render the same source to both DOCX and PDF.
+Docscriptor is a Python-first document authoring toolkit for people who want to define structured documents with normal Python code and render the same source to DOCX, PDF, and HTML.
 
 It is aimed at report, documentation, and manuscript workflows where content already lives near Python data, figures, and scripts.
 
@@ -57,6 +57,7 @@ report = Document(
 
 report.save_docx("artifacts/hello.docx")
 report.save_pdf("artifacts/hello.pdf")
+report.save_html("artifacts/hello.html")
 ```
 
 ## Authoring Model
@@ -77,7 +78,7 @@ The default behavior is intentionally conventional:
 
 ## Features
 
-- DOCX and PDF rendering from the same document tree
+- DOCX, PDF, and HTML rendering from the same document tree
 - block objects for paragraphs, lists, code blocks, equations, boxes, tables, figures, and generated pages
 - portable comments and footnotes that stay stable across both outputs
 - captioned tables and figures with automatic numbering and in-text references
@@ -121,7 +122,7 @@ The package is organized by responsibility:
 - `src/docscriptor/tables.py` for tables, table cells, dataframe support, and figures
 - `src/docscriptor/styles.py` for paragraph, numbering, table, box, and theme configuration
 - `src/docscriptor/references.py` for bibliography objects and BibTeX import
-- `src/docscriptor/renderers/docx.py` and `src/docscriptor/renderers/pdf.py` for format-specific layout
+- `src/docscriptor/renderers/docx.py`, `src/docscriptor/renderers/pdf.py`, and `src/docscriptor/renderers/html.py` for format-specific layout
 
 ## Development
 

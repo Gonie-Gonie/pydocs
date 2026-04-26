@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+from html import unescape
 from io import BytesIO
 from pathlib import Path
+import re
 
 from docx import Document as WordDocument
 from pypdf import PdfReader
@@ -42,12 +44,21 @@ def _pdf_image_draw_count(pdf_path: Path) -> int:
     return count
 
 
+def _normalized_html_text(html_path: Path) -> str:
+    html_text = html_path.read_text(encoding="utf-8")
+    html_text = re.sub(r"<style.*?>.*?</style>", " ", html_text, flags=re.DOTALL)
+    text = re.sub(r"<[^>]+>", " ", html_text)
+    return " ".join(unescape(text).split())
+
+
 def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     usage_guide = _load_example_module("usage_guide_example")
     docx_path, pdf_path = usage_guide.build_usage_guide(tmp_path)
+    html_path = tmp_path / "docscriptor-usage-guide.html"
 
     assert docx_path.exists()
     assert pdf_path.exists()
+    assert html_path.exists()
     assert (Path(usage_guide.__file__).resolve().parent / "assets" / "usage-guide-figure.png").exists()
 
     word_document = WordDocument(docx_path)
@@ -135,3 +146,28 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert "examples/journal_paper_example/main.py" in pdf_text
     assert len(pdf_reader.pages) >= 10
     assert _pdf_image_draw_count(pdf_path) == 2
+
+    html_text = html_path.read_text(encoding="utf-8")
+    normalized_html_text = _normalized_html_text(html_path)
+    assert "Using docscriptor" in normalized_html_text
+    assert "List of Tables" in normalized_html_text
+    assert "List of Figures" in normalized_html_text
+    assert "Contents" in normalized_html_text
+    assert "Footnotes" in normalized_html_text
+    assert "Comments" in normalized_html_text
+    assert "References" in normalized_html_text
+    assert "1 Getting Started" in normalized_html_text
+    assert "2 Document Model" in normalized_html_text
+    assert "3 Layout and Styling" in normalized_html_text
+    assert "4 Tables and Figures" in normalized_html_text
+    assert "5 Notes and References" in normalized_html_text
+    assert "6 Project Layout" in normalized_html_text
+    assert "7 End-to-End Workflow" in normalized_html_text
+    assert "save_html(...)" in normalized_html_text
+    assert "The same document tree can render to DOCX, PDF, and HTML." in normalized_html_text
+    assert "Portable footnotes stay stable in DOCX, PDF, and HTML" in normalized_html_text
+    assert "https://github.com/Gonie-Gonie/pydocs" in normalized_html_text
+    assert "examples/journal_paper_example/main.py" in normalized_html_text
+    assert html_text.count("data:image/png;base64,") == 2
+    assert 'href="#table_1"' in html_text
+    assert 'href="#figure_1"' in html_text

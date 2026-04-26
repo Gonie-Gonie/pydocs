@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+from html import unescape
 from io import BytesIO
 from pathlib import Path
+import re
 
 from docx import Document as WordDocument
 from pypdf import PdfReader
@@ -42,12 +44,21 @@ def _pdf_image_draw_count(pdf_path: Path) -> int:
     return count
 
 
+def _normalized_html_text(html_path: Path) -> str:
+    html_text = html_path.read_text(encoding="utf-8")
+    html_text = re.sub(r"<style.*?>.*?</style>", " ", html_text, flags=re.DOTALL)
+    text = re.sub(r"<[^>]+>", " ", html_text)
+    return " ".join(unescape(text).split())
+
+
 def test_journal_paper_example_builds_outputs(tmp_path: Path) -> None:
     paper_example = _load_example_module("journal_paper_example")
     docx_path, pdf_path = paper_example.build_journal_paper(tmp_path)
+    html_path = tmp_path / "journal-paper.html"
 
     assert docx_path.exists()
     assert pdf_path.exists()
+    assert html_path.exists()
     assert (Path(paper_example.__file__).resolve().parent / "assets" / "benchmark_results.csv").exists()
     assert (Path(paper_example.__file__).resolve().parent / "assets" / "ablation_results.csv").exists()
     assert (Path(paper_example.__file__).resolve().parent / "assets" / "system-diagram.png").exists()
@@ -116,3 +127,28 @@ def test_journal_paper_example_builds_outputs(tmp_path: Path) -> None:
     assert "https://yihui.org/knitr/" in normalized_pdf_text
     assert 6 <= len(pdf_reader.pages) <= 8
     assert _pdf_image_draw_count(pdf_path) == 3
+
+    html_text = html_path.read_text(encoding="utf-8")
+    normalized_html_text = _normalized_html_text(html_path)
+    assert "A Python-Native Workflow for Reproducible Journal Manuscripts" in normalized_html_text
+    assert "Jiyoon Kim, Minho Lee, and Sujin Park" in normalized_html_text
+    assert "Department of Computational Publishing, Seoul" in normalized_html_text
+    assert "Abstract" in normalized_html_text
+    assert "Highlights" in normalized_html_text
+    assert "Introduction" in normalized_html_text
+    assert "Methods" in normalized_html_text
+    assert "Experimental Setup" in normalized_html_text
+    assert "Results" in normalized_html_text
+    assert "Discussion" in normalized_html_text
+    assert "Acknowledgements" in normalized_html_text
+    assert "References" in normalized_html_text
+    assert "DOCX, PDF, and HTML outputs are rendered from the same source document." in normalized_html_text
+    assert "The same manuscript source renders to DOCX, PDF, and HTML for review and submission." in normalized_html_text
+    assert "pandas.read_csv" in normalized_html_text
+    assert "matplotlib" in normalized_html_text
+    assert "https://doi.org/10.1093/comjnl/27.2.97" in normalized_html_text
+    assert "https://doi.org/10.1198/106186007X178663" in normalized_html_text
+    assert "https://yihui.org/knitr/" in normalized_html_text
+    assert html_text.count("data:image/png;base64,") == 3
+    assert 'href="#table_2"' in html_text
+    assert 'href="#figure_2"' in html_text

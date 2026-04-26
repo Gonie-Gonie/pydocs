@@ -11,7 +11,7 @@ from docscriptor.core import PathLike, normalize_color
 from docscriptor.styles import TableStyle
 
 if TYPE_CHECKING:
-    from docscriptor.renderers.context import DocxRenderContext, PdfRenderContext
+    from docscriptor.renderers.context import DocxRenderContext, HtmlRenderContext, PdfRenderContext
 
 
 @dataclass(slots=True, init=False)
@@ -386,6 +386,13 @@ class Table(Block):
     ) -> list[object]:
         return renderer.render_table(self, context)
 
+    def render_to_html(
+        self,
+        renderer: object,
+        context: HtmlRenderContext,
+    ) -> str:
+        return renderer.render_table(self, context)
+
 
 @dataclass(slots=True, init=False)
 class Figure(Block):
@@ -432,4 +439,11 @@ class Figure(Block):
         renderer: object,
         context: PdfRenderContext,
     ) -> list[object]:
+        return renderer.render_figure(self, context)
+
+    def render_to_html(
+        self,
+        renderer: object,
+        context: HtmlRenderContext,
+    ) -> str:
         return renderer.render_figure(self, context)

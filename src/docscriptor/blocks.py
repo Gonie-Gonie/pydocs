@@ -10,7 +10,7 @@ from docscriptor.inline import InlineInput, Text, coerce_inlines
 from docscriptor.styles import BoxStyle, ListStyle, ParagraphStyle
 
 if TYPE_CHECKING:
-    from docscriptor.renderers.context import DocxRenderContext, PdfRenderContext
+    from docscriptor.renderers.context import DocxRenderContext, HtmlRenderContext, PdfRenderContext
 
 
 class Block:
@@ -32,6 +32,15 @@ class Block:
         context: PdfRenderContext,
     ) -> list[object]:
         """Render the block into one or more PDF flowables."""
+
+        raise NotImplementedError
+
+    def render_to_html(
+        self,
+        renderer: object,
+        context: HtmlRenderContext,
+    ) -> str:
+        """Render the block into HTML markup."""
 
         raise NotImplementedError
 
@@ -69,6 +78,13 @@ class Paragraph(Block):
         renderer: object,
         context: PdfRenderContext,
     ) -> list[object]:
+        return renderer.render_paragraph(self, context)
+
+    def render_to_html(
+        self,
+        renderer: object,
+        context: HtmlRenderContext,
+    ) -> str:
         return renderer.render_paragraph(self, context)
 
 
@@ -116,6 +132,13 @@ class ListBlock(Block):
     ) -> list[object]:
         return renderer.render_list(self, context)
 
+    def render_to_html(
+        self,
+        renderer: object,
+        context: HtmlRenderContext,
+    ) -> str:
+        return renderer.render_list(self, context)
+
 
 class BulletList(ListBlock):
     """An unordered list of paragraph items."""
@@ -156,6 +179,13 @@ class CodeBlock(Block):
     ) -> list[object]:
         return renderer.render_code_block(self, context)
 
+    def render_to_html(
+        self,
+        renderer: object,
+        context: HtmlRenderContext,
+    ) -> str:
+        return renderer.render_code_block(self, context)
+
 
 @dataclass(slots=True)
 class Equation(Block):
@@ -186,6 +216,13 @@ class Equation(Block):
     ) -> list[object]:
         return renderer.render_equation(self, context)
 
+    def render_to_html(
+        self,
+        renderer: object,
+        context: HtmlRenderContext,
+    ) -> str:
+        return renderer.render_equation(self, context)
+
 
 @dataclass(slots=True, init=False)
 class TableList(Block):
@@ -209,6 +246,13 @@ class TableList(Block):
         renderer: object,
         context: PdfRenderContext,
     ) -> list[object]:
+        return renderer.render_table_list(self, context)
+
+    def render_to_html(
+        self,
+        renderer: object,
+        context: HtmlRenderContext,
+    ) -> str:
         return renderer.render_table_list(self, context)
 
 
@@ -236,6 +280,13 @@ class FigureList(Block):
     ) -> list[object]:
         return renderer.render_figure_list(self, context)
 
+    def render_to_html(
+        self,
+        renderer: object,
+        context: HtmlRenderContext,
+    ) -> str:
+        return renderer.render_figure_list(self, context)
+
 
 @dataclass(slots=True, init=False)
 class ReferencesPage(Block):
@@ -259,6 +310,13 @@ class ReferencesPage(Block):
         renderer: object,
         context: PdfRenderContext,
     ) -> list[object]:
+        return renderer.render_references_page(self, context)
+
+    def render_to_html(
+        self,
+        renderer: object,
+        context: HtmlRenderContext,
+    ) -> str:
         return renderer.render_references_page(self, context)
 
 
@@ -286,6 +344,13 @@ class CommentsPage(Block):
     ) -> list[object]:
         return renderer.render_comments_page(self, context)
 
+    def render_to_html(
+        self,
+        renderer: object,
+        context: HtmlRenderContext,
+    ) -> str:
+        return renderer.render_comments_page(self, context)
+
 
 @dataclass(slots=True, init=False)
 class FootnotesPage(Block):
@@ -311,6 +376,13 @@ class FootnotesPage(Block):
     ) -> list[object]:
         return renderer.render_footnotes_page(self, context)
 
+    def render_to_html(
+        self,
+        renderer: object,
+        context: HtmlRenderContext,
+    ) -> str:
+        return renderer.render_footnotes_page(self, context)
+
 
 @dataclass(slots=True, init=False)
 class TableOfContents(Block):
@@ -334,6 +406,13 @@ class TableOfContents(Block):
         renderer: object,
         context: PdfRenderContext,
     ) -> list[object]:
+        return renderer.render_table_of_contents(self, context)
+
+    def render_to_html(
+        self,
+        renderer: object,
+        context: HtmlRenderContext,
+    ) -> str:
         return renderer.render_table_of_contents(self, context)
 
 
@@ -388,6 +467,13 @@ class Body(Block):
             story.extend(child.render_to_pdf(renderer, context))
         return story
 
+    def render_to_html(
+        self,
+        renderer: object,
+        context: HtmlRenderContext,
+    ) -> str:
+        return "".join(child.render_to_html(renderer, context) for child in self.children)
+
 
 @dataclass(slots=True, init=False)
 class Box(Block):
@@ -420,6 +506,13 @@ class Box(Block):
         renderer: object,
         context: PdfRenderContext,
     ) -> list[object]:
+        return renderer.render_box(self, context)
+
+    def render_to_html(
+        self,
+        renderer: object,
+        context: HtmlRenderContext,
+    ) -> str:
         return renderer.render_box(self, context)
 
 
@@ -485,6 +578,13 @@ class Section(Block):
         for child in self.children:
             story.extend(child.render_to_pdf(renderer, context))
         return story
+
+    def render_to_html(
+        self,
+        renderer: object,
+        context: HtmlRenderContext,
+    ) -> str:
+        return renderer.render_section(self, context)
 
 
 class Chapter(Section):

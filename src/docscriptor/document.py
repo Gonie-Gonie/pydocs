@@ -100,3 +100,10 @@ class Document:
         from docscriptor.renderers.pdf import PdfRenderer
 
         return PdfRenderer().render(self, path)
+
+    def save_html(self, path: PathLike) -> Path:
+        """Render the document to HTML and return the output path."""
+
+        from docscriptor.renderers.html import HtmlRenderer
+
+        return HtmlRenderer().render(self, path)

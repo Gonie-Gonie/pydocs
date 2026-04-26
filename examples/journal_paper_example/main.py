@@ -175,7 +175,7 @@ def build_journal_paper_document() -> Document:
                 code("pandas.read_csv"),
                 ", plots are created with ",
                 code("matplotlib"),
-                ", and both DOCX and PDF outputs are rendered from the same source document. The workflow follows the reporting discipline described in ",
+                ", and DOCX, PDF, and HTML outputs are rendered from the same source document. The workflow follows the reporting discipline described in ",
                 manuscript_sources.cite("reproducible-research"),
                 ".",
             ),
@@ -194,7 +194,7 @@ def build_journal_paper_document() -> Document:
             BulletList(
                 "Tables can be authored directly from CSV-backed DataFrames.",
                 "Matplotlib figures can be inserted without saving temporary image files.",
-                "The same manuscript source renders to both DOCX and PDF for review and submission.",
+                "The same manuscript source renders to DOCX, PDF, and HTML for review and submission.",
             ),
             level=2,
             numbered=False,
@@ -358,7 +358,7 @@ def build_journal_paper_document() -> Document:
 
 
 def build_journal_paper(output_dir: str | Path) -> tuple[Path, Path]:
-    """Build the journal paper example and export it to DOCX and PDF."""
+    """Build the journal paper example and export it to DOCX, PDF, and HTML."""
 
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -366,8 +366,10 @@ def build_journal_paper(output_dir: str | Path) -> tuple[Path, Path]:
     document = build_journal_paper_document()
     docx_path = output_path / "journal-paper.docx"
     pdf_path = output_path / "journal-paper.pdf"
+    html_path = output_path / "journal-paper.html"
     document.save_docx(docx_path)
     document.save_pdf(pdf_path)
+    document.save_html(html_path)
     return docx_path, pdf_path
 
 
@@ -375,8 +377,10 @@ def main() -> None:
     """Build the paper into the default example output directory."""
 
     docx_path, pdf_path = build_journal_paper(OUTPUT_DIR)
+    html_path = OUTPUT_DIR / "journal-paper.html"
     print(f"Wrote {docx_path}")
     print(f"Wrote {pdf_path}")
+    print(f"Wrote {html_path}")
 
 
 if __name__ == "__main__":

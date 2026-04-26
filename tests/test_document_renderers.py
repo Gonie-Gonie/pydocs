@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from html import unescape
 from io import BytesIO
 from pathlib import Path
+import re
 import struct
 import zlib
 import zipfile
@@ -216,6 +218,13 @@ def _pdf_text_context(pdf_path: Path, text: str, window: int = 160) -> bytes:
 def _docx_document_xml(docx_path: Path) -> str:
     with zipfile.ZipFile(docx_path) as archive:
         return archive.read("word/document.xml").decode("utf-8")
+
+
+def _normalized_html_text(html_path: Path) -> str:
+    html_text = html_path.read_text(encoding="utf-8")
+    html_text = re.sub(r"<style.*?>.*?</style>", " ", html_text, flags=re.DOTALL)
+    text = re.sub(r"<[^>]+>", " ", html_text)
+    return " ".join(unescape(text).split())
 
 
 def test_version_is_defined() -> None:
@@ -651,14 +660,18 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
 
     docx_path = tmp_path / "report.docx"
     pdf_path = tmp_path / "report.pdf"
+    html_path = tmp_path / "report.html"
 
     document.save_docx(docx_path)
     document.save_pdf(pdf_path)
+    document.save_html(html_path)
 
     assert docx_path.exists()
     assert pdf_path.exists()
+    assert html_path.exists()
     assert docx_path.stat().st_size > 0
     assert pdf_path.stat().st_size > 0
+    assert html_path.stat().st_size > 0
 
     word_document = WordDocument(docx_path)
     paragraph_texts = [paragraph.text for paragraph in word_document.paragraphs]
@@ -815,3 +828,46 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert b"15 Tf" in _pdf_text_context(pdf_path, "Comments")
     assert b"15 Tf" in _pdf_text_context(pdf_path, "References")
     assert b"15 Tf" in _pdf_text_context(pdf_path, "Contents")
+
+    html_text = html_path.read_text(encoding="utf-8")
+    normalized_html_text = _normalized_html_text(html_path)
+    assert "Pipeline Report" in normalized_html_text
+    assert "1 Summary" in normalized_html_text
+    assert "1.1 Highlights" in normalized_html_text
+    assert "1.1.1 Artifacts" in normalized_html_text
+    assert "1.1.1.1 Export Steps" in normalized_html_text
+    assert "Contents" in normalized_html_text
+    assert "Comments" in normalized_html_text
+    assert "Footnotes" in normalized_html_text
+    assert "List of Tables" in normalized_html_text
+    assert "List of Figures" in normalized_html_text
+    assert "References" in normalized_html_text
+    assert "The review note [1] appears inline and is also exported to the comments page." in normalized_html_text
+    assert "See Table 1 and Figure 1 for the generated outputs." in normalized_html_text
+    assert "Repository status is tracked in [1]" in normalized_html_text
+    assert "Registered bibliography entries can still be cited as [2]" in normalized_html_text
+    assert "Portable footnotes such as term" in normalized_html_text
+    assert "Table cell footnote note." in normalized_html_text
+    assert "Paragraph footnote note." in normalized_html_text
+    assert "[1] Check the generated outputs before release." in normalized_html_text
+    assert "Review Box" in normalized_html_text
+    assert "A boxed paragraph can live alongside nested objects." in normalized_html_text
+    assert "stable" in normalized_html_text
+    assert normalized_html_text.count("Table 1. Generated artifacts.") >= 2
+    assert normalized_html_text.count("Table 2. Output workflow.") >= 2
+    assert normalized_html_text.count("Table 3. Merged header table.") >= 2
+    assert normalized_html_text.count("Figure 1. Tiny sample image.") >= 2
+    assert normalized_html_text.count("Figure 2. Second tiny sample image.") >= 2
+    assert "https://github.com/Gonie-Gonie/pydocs" in normalized_html_text
+    assert "https://github.com/Gonie-Gonie/pydocs/releases" in normalized_html_text
+    assert "Internal Draft" not in normalized_html_text
+    assert "Lists render into both DOCX and PDF." in normalized_html_text
+    assert "from docscriptor import Document" in normalized_html_text
+    assert html_text.count("data:image/png;base64,") == 3
+    assert 'href="#table_1"' in html_text
+    assert 'href="#figure_1"' in html_text
+    assert 'id="table_1"' in html_text
+    assert 'id="figure_1"' in html_text
+    assert 'id="citation_1"' in html_text
+    assert 'id="comment_1"' in html_text
+    assert 'id="footnote_1"' in html_text
