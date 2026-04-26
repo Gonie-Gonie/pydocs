@@ -200,6 +200,7 @@ class Theme:
     contents_title: str = "Contents"
     generated_section_level: int = 2
     generated_page_breaks: bool = True
+    auto_footnotes_page: bool = True
     show_page_numbers: bool = False
     page_number_alignment: str = "center"
     page_number_format: str = "{page}"

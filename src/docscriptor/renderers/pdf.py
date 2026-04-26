@@ -190,6 +190,9 @@ class PdfRenderer:
         elif not has_front_matter:
             story.extend(self._render_top_level_children(main_children, context))
 
+        if self._should_auto_render_footnotes_page(document, render_index):
+            story.extend(self.render_footnotes_page(FootnotesPage(), context))
+
         if document.theme.show_page_numbers:
             page_callback = self._page_number_callback(
                 document.theme,
@@ -551,6 +554,17 @@ class PdfRenderer:
 
     def _is_paginated_generated_page(self, block: object) -> bool:
         return isinstance(block, (TableList, FigureList, TableOfContents))
+
+    def _should_auto_render_footnotes_page(
+        self,
+        document: Document,
+        render_index: RenderIndex,
+    ) -> bool:
+        return (
+            document.theme.auto_footnotes_page
+            and bool(render_index.footnotes)
+            and not any(isinstance(child, FootnotesPage) for child in document.body.children)
+        )
 
     def _paragraph_style(self, style: ParagraphStyle, theme: Theme, base_style: RLParagraphStyle) -> RLParagraphStyle:
         return RLParagraphStyle(

@@ -467,6 +467,37 @@ def test_bibtex_string_creates_citation_library() -> None:
     assert "GitHub repository" in entry.format_reference()
 
 
+def test_auto_footnotes_page_can_be_disabled(tmp_path: Path) -> None:
+    document = Document(
+        "Inline Notes",
+        Paragraph(
+            "Portable ",
+            footnote("term", "Suppressed footnote note."),
+            " stays inline.",
+        ),
+        theme=Theme(auto_footnotes_page=False),
+    )
+
+    docx_path = tmp_path / "inline-notes.docx"
+    pdf_path = tmp_path / "inline-notes.pdf"
+    html_path = tmp_path / "inline-notes.html"
+
+    document.save_docx(docx_path)
+    document.save_pdf(pdf_path)
+    document.save_html(html_path)
+
+    paragraph_texts = [paragraph.text for paragraph in WordDocument(docx_path).paragraphs]
+    pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf_path.read_bytes())).pages)
+    normalized_html_text = _normalized_html_text(html_path)
+
+    assert "Footnotes" not in paragraph_texts
+    assert all("Suppressed footnote note." not in text for text in paragraph_texts)
+    assert "Footnotes" not in pdf_text
+    assert "Suppressed footnote note." not in pdf_text
+    assert "Footnotes" not in normalized_html_text
+    assert "Suppressed footnote note." not in normalized_html_text
+
+
 def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     image_path = tmp_path / "sample.png"
     _write_sample_image(image_path)
@@ -614,7 +645,7 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
                 Paragraph(
                     "Portable footnotes such as ",
                     footnote("term", "Paragraph footnote note."),
-                    " are collected on a generated footnotes page.",
+                    " are collected automatically on the footnotes page.",
                 ),
                 boxed_detail,
                 Subsection(
@@ -642,7 +673,6 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
         ),
         TableList(),
         FigureList(),
-        FootnotesPage(),
         CommentsPage(),
         ReferencesPage(),
         author="pytest",
@@ -693,7 +723,7 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert any("See Table 1 and Figure 1 for the generated outputs." in text for text in paragraph_texts)
     assert any("Repository status is tracked in [1]." in text for text in paragraph_texts)
     assert any("Registered bibliography entries can still be cited as [2]." in text for text in paragraph_texts)
-    assert any("Portable footnotes such as term" in text and "generated footnotes page." in text for text in paragraph_texts)
+    assert any("Portable footnotes such as term" in text and "collected automatically on the footnotes page." in text for text in paragraph_texts)
     assert any("Inline math such as" in text and "2 + " in text and " = " in text for text in paragraph_texts)
     assert any("dx = (" in text and ")/(3)" in text for text in paragraph_texts)
     assert any("Table cell footnote note." in text for text in paragraph_texts)
@@ -781,7 +811,7 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     assert "See Table 1 and Figure 1 for the generated outputs." in pdf_text
     assert "Repository status is tracked in [1]." in pdf_text
     assert "Registered bibliography entries can still be cited as [2]." in pdf_text
-    assert "Portable footnotes such as term" in pdf_text and "generated footnotes page." in pdf_text
+    assert "Portable footnotes such as term" in pdf_text and "collected automatically on the footnotes page." in pdf_text
     assert "Inline math such as" in pdf_text
     assert "dx = (" in pdf_text
     assert "Table cell footnote note." in pdf_text

@@ -93,6 +93,9 @@ class DocxRenderer:
         else:
             self._render_top_level_children(word_document, main_children, context)
 
+        if self._should_auto_render_footnotes_page(document, render_index):
+            self.render_footnotes_page(FootnotesPage(), context)
+
         if document.theme.show_page_numbers:
             self._configure_page_number_sections(
                 word_document,
@@ -454,6 +457,17 @@ class DocxRenderer:
 
     def _is_paginated_generated_page(self, block: object) -> bool:
         return isinstance(block, (TableList, FigureList, TableOfContents))
+
+    def _should_auto_render_footnotes_page(
+        self,
+        document: Document,
+        render_index: RenderIndex,
+    ) -> bool:
+        return (
+            document.theme.auto_footnotes_page
+            and bool(render_index.footnotes)
+            and not any(isinstance(child, FootnotesPage) for child in document.body.children)
+        )
 
     def _ensure_page_break(self, word_document: WordDocument) -> None:
         if self._ends_with_page_break(word_document):

@@ -24,7 +24,6 @@ from docscriptor import (
     Figure,
     FigureList,
     Footnote,
-    FootnotesPage,
     HeadingNumbering,
     ListStyle,
     Math,
@@ -173,16 +172,18 @@ def build_usage_guide_document() -> Document:
             ["TableOfContents", "Add TableOfContents()", "Render a contents page from authored headings."],
             ["TableList / FigureList", "Add TableList() or FigureList()", "Collect captioned tables and figures automatically."],
             [
-                "FootnotesPage",
+                "Automatic footnotes",
                 Paragraph(
-                    "Add FootnotesPage() to collect portable notes ",
+                    "Create portable notes directly with ",
+                    code("Footnote.annotated(...)"),
+                    " or ",
                     Footnote.annotated(
-                        "including table-cell notes",
+                        "table-cell notes",
                         "This footnote was created from a table cell inside the usage guide.",
                     ),
                     ".",
                 ),
-                "Keeps footnotes stable in DOCX, PDF, and HTML.",
+                "Collects footnotes automatically at the end of the document across DOCX, PDF, and HTML.",
             ],
             ["CommentsPage", "Add CommentsPage()", "Exports inline review comments to a dedicated page."],
             ["ReferencesPage", "Add ReferencesPage()", "Only cited bibliography entries are rendered."],
@@ -380,15 +381,15 @@ def build_usage_guide_document() -> Document:
                     ", ",
                     code("FigureList()"),
                     ", ",
-                    code("FootnotesPage()"),
-                    ", ",
                     code("CommentsPage()"),
                     ", or ",
                     code("ReferencesPage()"),
                     " where you want them to appear in the document."
                 ),
                 Paragraph(
-                    "Because they are just blocks, the document remains predictable: authored content stays in order, while generated summaries are inserted exactly where you place them."
+                    "Because they are just blocks, the document remains predictable: authored content stays in order, while generated summaries are inserted exactly where you place them. Footnotes are collected automatically by default, and ",
+                    code("FootnotesPage()"),
+                    " is only needed when you want a custom insertion point."
                 ),
                 generated_pages_table,
             ),
@@ -518,7 +519,7 @@ def build_usage_guide_document() -> Document:
             Section(
                 "Footnotes and comments",
                 Paragraph(
-                    "Docscriptor uses portable footnotes rather than fragile page-bottom placement. Markers appear inline where the note is referenced, and a generated footnotes page collects the full text."
+                    "Docscriptor uses portable footnotes rather than fragile page-bottom placement. Markers appear inline where the note is referenced, and an automatically generated footnotes page collects the full text unless you override the placement explicitly."
                 ),
                 Paragraph(
                     "That approach is especially useful when the same content needs to render to DOCX, PDF, and HTML. It avoids the layout edge cases that often appear around tables, figures, and page breaks."
@@ -601,7 +602,6 @@ def build_usage_guide_document() -> Document:
                 ),
             ),
         ),
-        FootnotesPage(),
         CommentsPage(),
         ReferencesPage(),
         author="docscriptor examples",

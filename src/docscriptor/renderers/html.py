@@ -87,6 +87,9 @@ class HtmlRenderer:
                 + "</section>"
             )
 
+        if self._should_auto_render_footnotes_page(document, render_index):
+            body_parts.append(self.render_footnotes_page(FootnotesPage(), context))
+
         body_parts.append("</div>")
 
         html = "\n".join(
@@ -498,6 +501,17 @@ class HtmlRenderer:
         context: HtmlRenderContext,
     ) -> str:
         return "".join(child.render_to_html(self, context) for child in children)
+
+    def _should_auto_render_footnotes_page(
+        self,
+        document: Document,
+        render_index: RenderIndex,
+    ) -> bool:
+        return (
+            document.theme.auto_footnotes_page
+            and bool(render_index.footnotes)
+            and not any(isinstance(child, FootnotesPage) for child in document.body.children)
+        )
 
     def _render_title_matter(
         self,
