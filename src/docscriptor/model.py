@@ -72,6 +72,7 @@ from docscriptor.inline import (
     styled,
 )
 from docscriptor.references import CitationLibrary, CitationSource
+from docscriptor.settings import DocumentSettings
 from docscriptor.styles import (
     BoxStyle,
     HeadingNumbering,

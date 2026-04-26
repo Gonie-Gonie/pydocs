@@ -20,6 +20,7 @@ from docscriptor import (
     CommentsPage,
     CodeBlock,
     Document,
+    DocumentSettings,
     Equation,
     Figure,
     FigureList,
@@ -604,18 +605,20 @@ def build_usage_guide_document() -> Document:
         ),
         CommentsPage(),
         ReferencesPage(),
-        author="docscriptor examples",
-        summary="Detailed usage guide document",
-        subtitle="Detailed usage guide and API walkthrough",
-        authors=["docscriptor examples"],
-        affiliations=[
-            italic("Python-first document authoring toolkit"),
-        ],
-        cover_page=True,
-        theme=Theme(
-            show_page_numbers=True,
-            page_number_format="{page}",
-            heading_numbering=HeadingNumbering(),
+        settings=DocumentSettings(
+            author="docscriptor examples",
+            summary="Detailed usage guide document",
+            subtitle="Detailed usage guide and API walkthrough",
+            authors=["docscriptor examples"],
+            affiliations=[
+                italic("Python-first document authoring toolkit"),
+            ],
+            cover_page=True,
+            theme=Theme(
+                show_page_numbers=True,
+                page_number_format="{page}",
+                heading_numbering=HeadingNumbering(),
+            ),
         ),
         citations=related_work,
     )

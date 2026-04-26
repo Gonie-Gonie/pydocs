@@ -14,9 +14,10 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import RGBColor
 from pypdf import PdfReader
 
+import docscriptor.components.generated as generated_components
+import docscriptor.components.inline as inline_components
 from docscriptor.model import build_render_index
 from docscriptor import (
-    Bold,
     Box,
     BoxStyle,
     BulletList,
@@ -27,16 +28,14 @@ from docscriptor import (
     CommentsPage,
     CodeBlock,
     Document,
+    DocumentSettings,
     Equation,
     Figure,
     FigureList,
     Footnote,
-    FootnotesPage,
     HeadingNumbering,
-    Italic,
     ListStyle,
     Math,
-    Monospace,
     NumberedList,
     Paragraph,
     ParagraphStyle,
@@ -51,7 +50,6 @@ from docscriptor import (
     TableList,
     Text,
     Theme,
-    Hyperlink,
     bold,
     code,
     color,
@@ -64,6 +62,7 @@ from docscriptor import (
     markup,
     styled,
 )
+from docscriptor.settings import TextStyle
 
 class HighlightedParagraph(Paragraph):
     pass
@@ -288,7 +287,7 @@ def test_method_style_inline_actions_create_renderable_fragments() -> None:
     assert code("x = 1").style.font_name == "Courier New"
     assert color("accent", "#0066AA").style.color == "0066AA"
     external_link = link("https://example.com", "Example")
-    assert isinstance(external_link, Hyperlink)
+    assert isinstance(external_link, inline_components.Hyperlink)
     assert external_link.target == "https://example.com"
     assert external_link.plain_text() == "Example"
     assert source.cite().plain_text() == "[?]"
@@ -387,6 +386,7 @@ def test_sections_can_be_rendered_without_numbering() -> None:
 
 def test_public_api_prefers_classes_for_structural_nodes() -> None:
     assert hasattr(docscriptor, "Document")
+    assert hasattr(docscriptor, "DocumentSettings")
     assert hasattr(docscriptor, "Chapter")
     assert hasattr(docscriptor, "Section")
     assert hasattr(docscriptor, "Paragraph")
@@ -395,14 +395,10 @@ def test_public_api_prefers_classes_for_structural_nodes() -> None:
     assert hasattr(docscriptor, "TableList")
     assert hasattr(docscriptor, "FigureList")
     assert hasattr(docscriptor, "cite")
-    assert hasattr(docscriptor, "Bold")
     assert hasattr(docscriptor, "Box")
     assert hasattr(docscriptor, "BoxStyle")
-    assert hasattr(docscriptor, "Italic")
     assert hasattr(docscriptor, "HeadingNumbering")
-    assert hasattr(docscriptor, "Hyperlink")
     assert hasattr(docscriptor, "ListStyle")
-    assert hasattr(docscriptor, "Monospace")
     assert hasattr(docscriptor, "Table")
     assert hasattr(docscriptor, "TableCell")
     assert hasattr(docscriptor, "TableStyle")
@@ -411,9 +407,20 @@ def test_public_api_prefers_classes_for_structural_nodes() -> None:
     assert hasattr(docscriptor, "Comment")
     assert hasattr(docscriptor, "CommentsPage")
     assert hasattr(docscriptor, "Footnote")
-    assert hasattr(docscriptor, "FootnotesPage")
     assert hasattr(docscriptor, "Equation")
     assert hasattr(docscriptor, "Math")
+    assert hasattr(docscriptor, "TextStyle")
+    assert not hasattr(docscriptor, "Body")
+    assert not hasattr(docscriptor, "Bold")
+    assert not hasattr(docscriptor, "Hyperlink")
+    assert not hasattr(docscriptor, "Italic")
+    assert not hasattr(docscriptor, "Monospace")
+    assert not hasattr(docscriptor, "FootnotesPage")
+    assert hasattr(inline_components, "Bold")
+    assert hasattr(inline_components, "Hyperlink")
+    assert hasattr(inline_components, "Italic")
+    assert hasattr(inline_components, "Monospace")
+    assert hasattr(generated_components, "FootnotesPage")
     assert not hasattr(docscriptor, "ListBlock")
     assert not hasattr(docscriptor, "Citation")
     assert not hasattr(docscriptor, "TableReference")
@@ -465,6 +472,29 @@ def test_bibtex_string_creates_citation_library() -> None:
     assert entry.organization == "Gonie-Gonie"
     assert entry.url == "https://github.com/Gonie-Gonie/pydocs"
     assert "GitHub repository" in entry.format_reference()
+
+
+def test_document_accepts_document_settings() -> None:
+    settings = DocumentSettings(
+        author="Docscriptor",
+        summary="Settings test",
+        subtitle="Grouped metadata",
+        authors=["Example Author"],
+        affiliations=["Example Lab"],
+        cover_page=True,
+        theme=Theme(show_page_numbers=True),
+    )
+
+    document = Document("Configured", Paragraph("Body"), settings=settings)
+
+    assert document.author == "Docscriptor"
+    assert document.summary == "Settings test"
+    assert document.subtitle is not None
+    assert document.subtitle[0].plain_text() == "Grouped metadata"
+    assert document.authors[0][0].plain_text() == "Example Author"
+    assert document.affiliations[0][0].plain_text() == "Example Lab"
+    assert document.cover_page is True
+    assert document.theme.show_page_numbers is True
 
 
 def test_auto_footnotes_page_can_be_disabled(tmp_path: Path) -> None:
@@ -615,7 +645,7 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
                     " text, ",
                     code("code"),
                     ", and ",
-                    color("custom color", "#0066AA", style=docscriptor.TextStyle(bold=True)),
+                        color("custom color", "#0066AA", style=TextStyle(bold=True)),
                     ".",
                     style=ParagraphStyle(space_after=14),
                 ),

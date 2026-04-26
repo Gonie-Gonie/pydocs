@@ -12,6 +12,7 @@ from docscriptor import (
     CitationLibrary,
     CitationSource,
     Document,
+    DocumentSettings,
     Figure,
     Paragraph,
     ReferencesPage,
@@ -348,11 +349,13 @@ def build_journal_paper_document() -> Document:
             numbered=False,
         ),
         ReferencesPage(),
-        author="Jiyoon Kim; Minho Lee; Sujin Park",
-        summary="Journal-style example manuscript",
-        authors=["Jiyoon Kim, Minho Lee, and Sujin Park"],
-        affiliations=["Department of Computational Publishing, Seoul"],
-        theme=Theme(page_number_format="{page}"),
+        settings=DocumentSettings(
+            author="Jiyoon Kim; Minho Lee; Sujin Park",
+            summary="Journal-style example manuscript",
+            authors=["Jiyoon Kim, Minho Lee, and Sujin Park"],
+            affiliations=["Department of Computational Publishing, Seoul"],
+            theme=Theme(page_number_format="{page}"),
+        ),
         citations=manuscript_sources,
     )
 

@@ -60,6 +60,8 @@ report.save_pdf("artifacts/hello.pdf")
 report.save_html("artifacts/hello.html")
 ```
 
+When document metadata starts to grow, group it with `DocumentSettings(...)` instead of passing many keyword arguments directly to `Document(...)`.
+
 ## Authoring Model
 
 Docscriptor tries to keep the source readable:
@@ -67,6 +69,7 @@ Docscriptor tries to keep the source readable:
 - create objects with classes such as `Document`, `Chapter`, `Section`, `Paragraph`, `Table`, and `Figure`
 - apply inline actions with methods such as `Text.bold(...)`, `Text.italic(...)`, `Text.code(...)`, `Text.from_markup(...)`, `Comment.annotated(...)`, `Footnote.annotated(...)`, and `CitationSource.cite()`
 - keep the document tree explicit so the Python structure matches the final output structure
+- move document-wide metadata and theme options into `DocumentSettings(...)` when you want a single place to adjust title matter, cover pages, and renderer defaults
 
 The default behavior is intentionally conventional:
 
@@ -80,7 +83,8 @@ The default behavior is intentionally conventional:
 
 - DOCX, PDF, and HTML rendering from the same document tree
 - block objects for paragraphs, lists, code blocks, equations, boxes, tables, figures, and generated pages
-- portable comments and footnotes that stay stable across both outputs
+- portable comments and footnotes that stay stable across DOCX, PDF, and HTML
+- footnotes are collected automatically by default, while `FootnotesPage()` remains available for custom placement
 - captioned tables and figures with automatic numbering and in-text references
 - table support for `TableCell(...)`, `rowspan`, `colspan`, banded rows, and dataframe-like inputs
 - figure support for both stored image files and `savefig()`-compatible Python objects
@@ -117,10 +121,10 @@ By default they write outputs under:
 The package is organized by responsibility:
 
 - `src/docscriptor/document.py` for the root `Document`
-- `src/docscriptor/blocks.py` for structural and block-level objects
-- `src/docscriptor/inline.py` for inline fragments and action-style helpers
-- `src/docscriptor/tables.py` for tables, table cells, dataframe support, and figures
-- `src/docscriptor/styles.py` for paragraph, numbering, table, box, and theme configuration
+- `src/docscriptor/settings.py` for `DocumentSettings` plus grouped configuration exports
+- `src/docscriptor/components/` for more granular component imports
+- `src/docscriptor/blocks.py`, `src/docscriptor/inline.py`, and `src/docscriptor/tables.py` as compatibility modules for the underlying model
+- `src/docscriptor/styles.py` for low-level style and theme definitions
 - `src/docscriptor/references.py` for bibliography objects and BibTeX import
 - `src/docscriptor/renderers/docx.py`, `src/docscriptor/renderers/pdf.py`, and `src/docscriptor/renderers/html.py` for format-specific layout
 
