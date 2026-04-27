@@ -739,6 +739,8 @@ class PdfRenderer:
             )
         else:
             story.append(Spacer(1, 12))
+        if layout.row_count <= 12:
+            return [KeepTogether(story)]
         return story
 
     def _render_list(self, block: BulletList | NumberedList, theme: Theme, styles: object, render_index: RenderIndex) -> list[object]:
@@ -1541,11 +1543,11 @@ class PdfRenderer:
                     entry.level == 1,
                     False,
                 ),
-                fontSize=theme.body_font_size,
-                leading=theme.body_font_size * 1.3,
-                leftIndent=18 * max(entry.level - 1, 0),
-                spaceBefore=4 if entry.level == 1 else 0,
-                spaceAfter=5 if entry.level == 1 else 3,
+                fontSize=theme.body_font_size + (0.6 if entry.level == 1 else 0),
+                leading=(theme.body_font_size + (0.6 if entry.level == 1 else 0)) * 1.32,
+                leftIndent=20 * max(entry.level - 1, 0),
+                spaceBefore=8 if entry.level == 1 else (2 if entry.level == 2 else 0),
+                spaceAfter=6 if entry.level == 1 else 3,
                 textColor=colors.black,
             )
             story.append(

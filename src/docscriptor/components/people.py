@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Sequence
 
 from docscriptor.components.inline import Hyperlink, Text
@@ -48,6 +48,26 @@ class Affiliation:
 
 
 AffiliationInput = Affiliation | str
+
+
+@dataclass(slots=True)
+class AuthorLayout:
+    """Configurable title-matter layout for structured author metadata."""
+
+    mode: str = "journal"
+    show_affiliations: bool = True
+    show_details: bool = True
+    name_separator: str = ", "
+    affiliation_label_format: str = "[{label}]"
+    corresponding_marker: str = "*"
+
+    def __post_init__(self) -> None:
+        if self.mode not in {"journal", "stacked"}:
+            raise ValueError(f"Unsupported author layout mode: {self.mode!r}")
+        if "{label}" not in self.affiliation_label_format:
+            raise ValueError(
+                "author affiliation_label_format must contain a '{label}' placeholder"
+            )
 
 
 @dataclass(slots=True, frozen=True)
@@ -101,30 +121,46 @@ class Author:
     def display_name(self) -> str:
         """Return the visible author label."""
 
-        return f"{self.name}*" if self.corresponding else self.name
+        return self.name
 
-    def title_lines(self) -> tuple[AuthorTitleLine, ...]:
+    def title_lines(
+        self,
+        *,
+        corresponding_marker: str = "*",
+        show_affiliations: bool = True,
+        show_details: bool = True,
+    ) -> tuple[AuthorTitleLine, ...]:
         """Return renderer-ready title-matter lines for this author."""
 
         lines: list[AuthorTitleLine] = [
             AuthorTitleLine(
                 "name",
-                (Text(self.display_name()),),
+                (Text(self.display_name_with_marker(corresponding_marker)),),
             )
         ]
-        for affiliation in self.affiliations:
-            lines.append(
-                AuthorTitleLine(
-                    "affiliation",
-                    (Text(affiliation.formatted()),),
+        if show_affiliations:
+            for affiliation in self.affiliations:
+                lines.append(
+                    AuthorTitleLine(
+                        "affiliation",
+                        (Text(affiliation.formatted()),),
+                    )
                 )
-            )
-        detail = self._detail_fragments()
-        if detail is not None:
+        detail = self.detail_fragments()
+        if show_details and detail is not None:
             lines.append(AuthorTitleLine("detail", tuple(detail)))
         return tuple(lines)
 
-    def _detail_fragments(self) -> list[Text] | None:
+    def display_name_with_marker(self, marker: str = "*") -> str:
+        """Return the visible author label with the corresponding marker when needed."""
+
+        if self.corresponding and marker:
+            return f"{self.name}{marker}"
+        return self.name
+
+    def detail_fragments(self) -> list[Text] | None:
+        """Return supplemental detail fragments for title matter."""
+
         fragments: list[Text] = []
 
         def append_separator() -> None:
@@ -167,11 +203,19 @@ def coerce_authors(values: Sequence[AuthorInput] | None) -> tuple[Author, ...]:
     )
 
 
+def coerce_author_layout(value: AuthorLayout | None) -> AuthorLayout:
+    """Normalize document author-layout configuration."""
+
+    return value if value is not None else AuthorLayout()
+
+
 __all__ = [
     "Affiliation",
     "AffiliationInput",
     "Author",
     "AuthorInput",
+    "AuthorLayout",
     "AuthorTitleLine",
+    "coerce_author_layout",
     "coerce_authors",
 ]

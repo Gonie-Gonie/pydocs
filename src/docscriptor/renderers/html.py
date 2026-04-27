@@ -479,11 +479,8 @@ class HtmlRenderer:
 
         entries = "".join(
             (
-                '<div class="docscriptor-toc-entry" '
-                f'style="margin-left: {max(entry.level - 1, 0) * 18:.1f}px;'
-                + (" font-weight: 700;" if entry.level == 1 else "")
-                + (' margin-top: 4px;' if entry.level == 1 else "")
-                + '">'
+                f'<div class="docscriptor-toc-entry docscriptor-toc-entry-level-{entry.level}" '
+                f'style="margin-left: {max(entry.level - 1, 0) * 18:.1f}px;">'
                 + self._link_html(
                     entry.anchor,
                     self._inline_html(
@@ -1284,6 +1281,26 @@ body {{
 .docscriptor-caption-list-entry,
 .docscriptor-toc-entry {{
   margin: 0 0 6pt;
+}}
+.docscriptor-toc {{
+  display: grid;
+  row-gap: 2pt;
+}}
+.docscriptor-toc-entry-level-1 {{
+  margin-top: 10pt;
+  padding-top: 6pt;
+  border-top: 1px solid rgba(67, 89, 109, 0.18);
+  font-size: 1.01em;
+  font-weight: 700;
+}}
+.docscriptor-toc-entry-level-2 {{
+  margin-top: 2pt;
+  font-weight: 600;
+}}
+.docscriptor-toc-entry-level-3,
+.docscriptor-toc-entry-level-4 {{
+  color: #4f667a;
+  font-size: 0.97em;
 }}
 .docscriptor-generated-marker {{
   font-weight: 700;

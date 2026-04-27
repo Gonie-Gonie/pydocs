@@ -199,6 +199,7 @@ class Theme:
     contents_title: str = "Contents"
     generated_section_level: int = 2
     generated_page_breaks: bool = True
+    footnote_placement: str = "page"
     auto_footnotes_page: bool = True
     show_page_numbers: bool = False
     page_number_alignment: str = "center"
@@ -207,10 +208,10 @@ class Theme:
     main_matter_page_number_format: str = "decimal"
     page_number_font_size: float = 9.0
     title_alignment: str = "center"
-    subtitle_alignment: str = "left"
-    author_alignment: str = "left"
-    affiliation_alignment: str = "left"
-    author_detail_alignment: str = "left"
+    subtitle_alignment: str = "center"
+    author_alignment: str = "center"
+    affiliation_alignment: str = "center"
+    author_detail_alignment: str = "center"
     heading_numbering: HeadingNumbering = field(default_factory=HeadingNumbering)
     bullet_list_style: ListStyle = field(
         default_factory=lambda: ListStyle(marker_format="bullet", suffix="")
@@ -237,6 +238,10 @@ class Theme:
         if self.figure_caption_position not in {"above", "below"}:
             raise ValueError(
                 "figure_caption_position must be 'above' or 'below'"
+            )
+        if self.footnote_placement not in {"page", "document"}:
+            raise ValueError(
+                "footnote_placement must be 'page' or 'document'"
             )
         if self.page_number_alignment not in {"left", "center", "right"}:
             raise ValueError(

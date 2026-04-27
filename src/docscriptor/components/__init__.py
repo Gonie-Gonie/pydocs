@@ -8,6 +8,7 @@ from importlib import import_module
 _EXPORTS = {
     "Affiliation": "docscriptor.components.people",
     "Author": "docscriptor.components.people",
+    "AuthorLayout": "docscriptor.components.people",
     "Bold": "docscriptor.components.inline",
     "Box": "docscriptor.components.blocks",
     "BulletList": "docscriptor.components.blocks",

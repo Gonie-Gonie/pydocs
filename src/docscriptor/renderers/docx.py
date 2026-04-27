@@ -9,10 +9,15 @@ from docx import Document as WordDocument
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.section import WD_SECTION
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.opc.constants import CONTENT_TYPE as CT
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
+from docx.opc.packuri import PackURI
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from docx.oxml.parser import parse_xml
+from docx.parts.story import StoryPart
 from docx.shared import Inches, Pt, RGBColor
+from docx.text.paragraph import Paragraph as DocxParagraph
 
 from docscriptor.components.blocks import (
     Box,
@@ -63,6 +68,46 @@ TABLE_ALIGNMENTS = {
     "right": WD_TABLE_ALIGNMENT.RIGHT,
 }
 
+DEFAULT_FOOTNOTES_XML = b"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:footnote w:type="separator" w:id="-1">
+    <w:p>
+      <w:r>
+        <w:separator />
+      </w:r>
+    </w:p>
+  </w:footnote>
+  <w:footnote w:type="continuationSeparator" w:id="0">
+    <w:p>
+      <w:r>
+        <w:continuationSeparator />
+      </w:r>
+    </w:p>
+  </w:footnote>
+</w:footnotes>
+"""
+
+
+class FootnotesPart(StoryPart):
+    """Container part for native DOCX footnotes."""
+
+    @classmethod
+    def default(cls, package: object) -> "FootnotesPart":
+        return cls(
+            PackURI("/word/footnotes.xml"),
+            CT.WML_FOOTNOTES,
+            parse_xml(DEFAULT_FOOTNOTES_XML),
+            package,
+        )
+
+    def add_footnote_paragraph(self, footnote_id: int) -> DocxParagraph:
+        footnote = OxmlElement("w:footnote")
+        footnote.set(qn("w:id"), str(footnote_id))
+        paragraph = OxmlElement("w:p")
+        footnote.append(paragraph)
+        self._element.append(footnote)
+        return DocxParagraph(paragraph, self)
+
 
 class DocxRenderer:
     """Render docscriptor documents into DOCX files."""
@@ -76,6 +121,8 @@ class DocxRenderer:
         word_document = WordDocument()
         self._initialized_cells: set[int] = set()
         self._bookmark_id = 1
+        self._native_footnotes_part: FootnotesPart | None = None
+        self._rendered_native_footnotes: set[int] = set()
         render_index = build_render_index(document)
         self._configure_document(word_document, document)
         context = DocxRenderContext(
@@ -487,10 +534,75 @@ class DocxRenderer:
         render_index: RenderIndex,
     ) -> bool:
         return (
-            document.theme.auto_footnotes_page
+            document.theme.footnote_placement == "document"
+            and document.theme.auto_footnotes_page
             and bool(render_index.footnotes)
             and not any(isinstance(child, FootnotesPage) for child in document.body.children)
         )
+
+    def _keep_with_next(self, paragraph: object) -> None:
+        paragraph_properties = paragraph._p.get_or_add_pPr()
+        paragraph_properties.append(OxmlElement("w:keepNext"))
+
+    def _keep_lines_together(self, paragraph: object) -> None:
+        paragraph_properties = paragraph._p.get_or_add_pPr()
+        paragraph_properties.append(OxmlElement("w:keepLines"))
+
+    def _prevent_table_row_split(self, table: object) -> None:
+        for row in table.rows:
+            properties = row._tr.get_or_add_trPr()
+            properties.append(OxmlElement("w:cantSplit"))
+
+    def _docx_footnotes_part(self, word_document: WordDocument) -> FootnotesPart:
+        if self._native_footnotes_part is not None:
+            return self._native_footnotes_part
+        try:
+            footnotes_part = word_document.part.part_related_by(RT.FOOTNOTES)
+        except KeyError:
+            footnotes_part = FootnotesPart.default(word_document.part.package)
+            word_document.part.relate_to(footnotes_part, RT.FOOTNOTES)
+        self._native_footnotes_part = footnotes_part
+        return footnotes_part
+
+    def _ensure_native_footnote(
+        self,
+        fragment: Footnote,
+        *,
+        theme: Theme,
+        render_index: RenderIndex,
+        word_document: WordDocument,
+    ) -> int:
+        footnote_id = render_index.footnote_number(fragment)
+        if footnote_id in self._rendered_native_footnotes:
+            return footnote_id
+
+        footnotes_part = self._docx_footnotes_part(word_document)
+        paragraph = footnotes_part.add_footnote_paragraph(footnote_id)
+        paragraph.paragraph_format.space_after = Pt(0)
+        reference_run = paragraph.add_run()
+        reference_run.font.superscript = True
+        reference_run._r.append(OxmlElement("w:footnoteRef"))
+        spacer_run = paragraph.add_run(" ")
+        self._apply_run_style(
+            spacer_run,
+            Text("").style,
+            default_size=max(theme.body_font_size - 1, 8),
+        )
+        self._append_runs(
+            paragraph,
+            fragment.note,
+            default_size=max(theme.body_font_size - 1, 8),
+            theme=theme,
+            render_index=render_index,
+            word_document=word_document,
+        )
+        self._rendered_native_footnotes.add(footnote_id)
+        return footnote_id
+
+    def _append_native_footnote_reference(self, run: object, footnote_id: int) -> None:
+        reference = OxmlElement("w:footnoteReference")
+        reference.set(qn("w:id"), str(footnote_id))
+        run._r.append(reference)
 
     def _ensure_page_break(self, word_document: WordDocument) -> None:
         if self._ends_with_page_break(word_document):
@@ -626,7 +738,14 @@ class DocxRenderer:
                 )
                 continue
             if isinstance(fragment, Footnote):
-                self._append_footnote_runs(paragraph, fragment, default_size=default_size, render_index=render_index)
+                self._append_footnote_runs(
+                    paragraph,
+                    fragment,
+                    default_size=default_size,
+                    theme=theme,
+                    render_index=render_index,
+                    word_document=word_document,
+                )
                 continue
             if isinstance(fragment, Math):
                 self._append_math_runs(paragraph, fragment, default_size=default_size)
@@ -756,11 +875,37 @@ class DocxRenderer:
         fragment: Footnote,
         *,
         default_size: float | None,
+        theme: Theme | None,
         render_index: RenderIndex | None,
+        word_document: WordDocument | None,
     ) -> None:
         if fragment.value:
             visible_run = paragraph.add_run(fragment.value)
             self._apply_run_style(visible_run, fragment.style, default_size=default_size)
+
+        if (
+            theme is not None
+            and word_document is not None
+            and render_index is not None
+            and theme.footnote_placement == "page"
+        ):
+            marker_run = paragraph.add_run()
+            self._apply_run_style(
+                marker_run,
+                fragment.style,
+                default_size=max((default_size or 10.0) - 2, 8),
+            )
+            marker_run.font.superscript = True
+            self._append_native_footnote_reference(
+                marker_run,
+                self._ensure_native_footnote(
+                    fragment,
+                    theme=theme,
+                    render_index=render_index,
+                    word_document=word_document,
+                ),
+            )
+            return
 
         marker_run = paragraph.add_run(self._footnote_marker(fragment, render_index))
         self._apply_run_style(marker_run, fragment.style, default_size=max((default_size or 10.0) - 2, 8))
@@ -892,6 +1037,7 @@ class DocxRenderer:
                 return
             caption = self._add_paragraph(container)
             caption.alignment = ALIGNMENTS[theme.caption_alignment]
+            self._keep_lines_together(caption)
             self._append_runs(
                 caption,
                 self._caption_fragments(
@@ -907,6 +1053,8 @@ class DocxRenderer:
             anchor = render_index.table_anchor(table_block)
             if anchor is not None:
                 self._add_bookmark(caption, anchor)
+            if theme.table_caption_position == "above":
+                self._keep_with_next(caption)
 
         if table_block.caption is not None and theme.table_caption_position == "above":
             render_caption()
@@ -915,6 +1063,7 @@ class DocxRenderer:
         table = container.add_table(rows=layout.row_count, cols=layout.column_count)
         table.style = "Table Grid"
         table.alignment = TABLE_ALIGNMENTS[theme.table_alignment]
+        self._prevent_table_row_split(table)
         if table_block.column_widths is not None:
             for column_index, width in enumerate(table_block.column_widths):
                 table.columns[column_index].width = Inches(width)
@@ -970,6 +1119,7 @@ class DocxRenderer:
                 return
             caption = self._add_paragraph(container)
             caption.alignment = ALIGNMENTS[theme.caption_alignment]
+            self._keep_lines_together(caption)
             self._append_runs(
                 caption,
                 self._caption_fragments(
@@ -985,12 +1135,16 @@ class DocxRenderer:
             anchor = render_index.figure_anchor(figure)
             if anchor is not None:
                 self._add_bookmark(caption, anchor)
+            if theme.figure_caption_position == "above":
+                self._keep_with_next(caption)
 
         if figure.caption is not None and theme.figure_caption_position == "above":
             render_caption()
 
         paragraph = self._add_paragraph(container)
         paragraph.alignment = ALIGNMENTS[theme.figure_alignment]
+        if figure.caption is not None and theme.figure_caption_position == "below":
+            self._keep_with_next(paragraph)
         run = paragraph.add_run()
         width = Inches(figure.width_inches) if figure.width_inches is not None else None
         run.add_picture(self._figure_picture_source(figure), width=width)
@@ -1208,16 +1362,16 @@ class DocxRenderer:
         self._add_heading(word_document, title or [Text(theme.contents_title)], level=theme.generated_section_level, theme=theme, number_label=None)
         for entry in render_index.headings:
             paragraph = word_document.add_paragraph()
-            paragraph.paragraph_format.left_indent = Inches(0.2 * max(entry.level - 1, 0))
-            paragraph.paragraph_format.space_before = Pt(4 if entry.level == 1 else 0)
-            paragraph.paragraph_format.space_after = Pt(5 if entry.level == 1 else 3)
+            paragraph.paragraph_format.left_indent = Inches(0.24 * max(entry.level - 1, 0))
+            paragraph.paragraph_format.space_before = Pt(8 if entry.level == 1 else (2 if entry.level == 2 else 0))
+            paragraph.paragraph_format.space_after = Pt(6 if entry.level == 1 else 3)
             self._append_hyperlink_runs(
                 paragraph,
                 entry.anchor,
                 self._heading_fragments(entry.title, entry.number),
                 internal=True,
                 style=TextStyle(bold=True if entry.level == 1 else None),
-                default_size=theme.body_font_size,
+                default_size=theme.body_font_size + (0.5 if entry.level == 1 else 0),
             )
 
     def _configure_page_number_sections(

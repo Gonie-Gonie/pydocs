@@ -21,6 +21,7 @@ from docscriptor.layout.indexing import build_render_index
 from docscriptor import (
     Affiliation,
     Author,
+    AuthorLayout,
     Box,
     BoxStyle,
     BulletList,
@@ -401,6 +402,7 @@ def test_public_api_prefers_classes_for_structural_nodes() -> None:
     assert hasattr(docscriptor, "Document")
     assert hasattr(docscriptor, "DocumentSettings")
     assert hasattr(docscriptor, "Chapter")
+    assert hasattr(docscriptor, "AuthorLayout")
     assert hasattr(docscriptor, "Section")
     assert hasattr(docscriptor, "Paragraph")
     assert hasattr(docscriptor, "BulletList")
@@ -498,6 +500,7 @@ def test_document_accepts_document_settings() -> None:
                 affiliations=[Affiliation(organization="Example Lab")],
             )
         ],
+        author_layout=AuthorLayout(mode="stacked"),
         cover_page=True,
         theme=Theme(show_page_numbers=True),
     )
@@ -510,6 +513,7 @@ def test_document_accepts_document_settings() -> None:
     assert document.subtitle[0].plain_text() == "Grouped metadata"
     assert document.authors[0].name == "Example Author"
     assert document.authors[0].affiliations[0].formatted() == "Example Lab"
+    assert document.settings.author_layout.mode == "stacked"
     assert document.cover_page is True
     assert document.theme.show_page_numbers is True
 
@@ -522,7 +526,12 @@ def test_auto_footnotes_page_can_be_disabled(tmp_path: Path) -> None:
             footnote("term", "Suppressed footnote note."),
             " stays inline.",
         ),
-        settings=DocumentSettings(theme=Theme(auto_footnotes_page=False)),
+        settings=DocumentSettings(
+            theme=Theme(
+                auto_footnotes_page=False,
+                footnote_placement="document",
+            )
+        ),
     )
 
     docx_path = tmp_path / "inline-notes.docx"
@@ -543,6 +552,29 @@ def test_auto_footnotes_page_can_be_disabled(tmp_path: Path) -> None:
     assert "Suppressed footnote note." not in pdf_text
     assert "Footnotes" not in normalized_html_text
     assert "Suppressed footnote note." not in normalized_html_text
+
+
+def test_docx_native_page_footnotes_are_default(tmp_path: Path) -> None:
+    document = Document(
+        "Inline Notes",
+        Paragraph(
+            "Portable ",
+            footnote("term", "Default native footnote note."),
+            " stays inline.",
+        ),
+    )
+
+    docx_path = tmp_path / "inline-notes.docx"
+    document.save_docx(docx_path)
+
+    paragraph_texts = [paragraph.text for paragraph in WordDocument(docx_path).paragraphs]
+    assert "Footnotes" not in paragraph_texts
+    assert all("Default native footnote note." not in text for text in paragraph_texts)
+
+    with zipfile.ZipFile(docx_path) as archive:
+        footnotes_xml = archive.read("word/footnotes.xml").decode("utf-8")
+    assert "Default native footnote note." in footnotes_xml
+    assert "w:footnoteReference" in _docx_document_xml(docx_path)
 
 
 def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
@@ -726,12 +758,13 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
             author="pytest",
             summary="Renderer integration test",
             theme=Theme(
-            show_page_numbers=True,
-            page_number_format="Page {page}",
-            page_number_alignment="center",
-            heading_numbering=HeadingNumbering(),
-            bullet_list_style=ListStyle(marker_format="bullet", bullet="•", suffix=""),
-            numbered_list_style=ListStyle(marker_format="decimal", suffix="."),
+                show_page_numbers=True,
+                page_number_format="Page {page}",
+                page_number_alignment="center",
+                footnote_placement="document",
+                heading_numbering=HeadingNumbering(),
+                bullet_list_style=ListStyle(marker_format="bullet", bullet="\u2022", suffix=""),
+                numbered_list_style=ListStyle(marker_format="decimal", suffix="."),
             ),
         ),
         citations=[registered_source, unused_source],
