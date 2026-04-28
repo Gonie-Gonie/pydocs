@@ -21,9 +21,10 @@ This file is the shared memory for ongoing work on this repository. Keep it read
 - Keep this shared note file and include the instruction to keep updating it.
 - Keep active task details in commit messages, tests, examples, and PR notes rather than preserving every short-lived implementation idea here.
 
-## API Compatibility Notes
+## API Evolution Notes
 
-- Existing public names should remain usable when introducing newer, clearer APIs.
+- Backward compatibility does not need to be preserved unless the user gives a specific compatibility guide or constraint.
+- This project is still in an API-shaping stage. Prefer clear, explicit, maintainable APIs over carrying old names by default.
 - Prefer document-level defaults through `DocumentSettings` when a setting should apply consistently across renderers.
 
 ## Local Environment Notes
