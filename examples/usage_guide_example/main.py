@@ -36,6 +36,8 @@ from docscriptor import (
     FigureList,
     Footnote,
     NumberedList,
+    PageMargins,
+    PageSize,
     Paragraph,
     ReferencesPage,
     Section,
@@ -116,13 +118,29 @@ settings = DocumentSettings(
 )
 """
 
-LAYOUT_CONTROL_SNIPPET = """from docscriptor import Theme
+LAYOUT_CONTROL_SNIPPET = """from docscriptor import DocumentSettings, PageMargins, PageSize, Theme
 
-theme = Theme(
-    footnote_placement="document",
-    generated_page_breaks=True,
-    table_caption_position="above",
-    figure_caption_position="below",
+settings = DocumentSettings(
+    unit="cm",
+    page_size=PageSize.a4(),
+    page_margins=PageMargins.symmetric(vertical=2.0, horizontal=2.4, unit="cm"),
+    theme=Theme(
+        footnote_placement="document",
+        generated_page_breaks=True,
+        table_caption_position="above",
+        figure_caption_position="below",
+    ),
+)
+"""
+
+FIGURE_SIZING_SNIPPET = """from docscriptor import DocumentSettings, Figure, PageMargins
+
+settings = DocumentSettings(unit="cm", page_margins=PageMargins.all(2.0, unit="cm"))
+
+figure = Figure(
+    "assets/system-diagram.png",
+    width=settings.get_text_width(0.75),
+    height=8.0,
 )
 """
 
@@ -445,6 +463,29 @@ def build_usage_guide_document() -> Document:
         caption="Behavior that stays stable across renderers and the places where format details still matter.",
         column_widths=[1.5, 2.7, 2.4],
     )
+    page_layout_table = Table(
+        headers=["Need", "API", "Effect"],
+        rows=[
+            ["Work in metric units", "DocumentSettings(unit='cm')", "Numeric lengths are interpreted as centimeters unless an object overrides unit."],
+            ["Set paper size", "PageSize.a4(), PageSize.letter(), or PageSize(width, height, unit=...)", "DOCX, PDF, and HTML use the same page box."],
+            ["Set printable margins", "PageMargins.all(...) or PageMargins.symmetric(...)", "The text area and HTML @page margins stay aligned."],
+            ["Force a new page", "PageBreak()", "The break is explicit in the document tree and renders across DOCX, PDF, and HTML."],
+            ["Size a figure from text width", "settings.get_text_width(0.75)", "Figures can follow the document text block instead of hard-coded page assumptions."],
+        ],
+        caption="Page layout controls shared across renderers.",
+        column_widths=[1.7, 2.6, 2.6],
+    )
+    figure_sizing_table = Table(
+        headers=["Figure intent", "Pattern", "Renderer behavior"],
+        rows=[
+            ["Constrain by width", "Figure(path, width=12, unit='cm')", "The image keeps its aspect ratio while fitting the requested width."],
+            ["Constrain by height", "Figure(path, height=8, unit='cm')", "The image keeps its aspect ratio while fitting the requested height."],
+            ["Force a box", "Figure(path, width=12, height=8, unit='cm')", "Both dimensions are honored, similar to explicit LaTeX graphic sizing."],
+            ["Follow text width", "Figure(path, width=settings.get_text_width(0.8))", "The width is computed from page size minus margins."],
+        ],
+        caption="Figure sizing patterns for width, height, and document-relative sizing.",
+        column_widths=[1.8, 2.9, 2.3],
+    )
     scaling_table = Table(
         headers=["Project stage", "Suggested structure", "Reasoning"],
         rows=[
@@ -673,6 +714,46 @@ def build_usage_guide_document() -> Document:
                 renderer_rules_table,
             ),
             Section(
+                "Page size, margins, and explicit breaks",
+                Paragraph(
+                    "Page geometry belongs in ",
+                    code("DocumentSettings"),
+                    " rather than in individual renderer calls. Use ",
+                    code("PageSize"),
+                    " for the physical page, ",
+                    code("PageMargins"),
+                    " for the printable area, and ",
+                    code("unit"),
+                    " to make numeric dimensions read naturally for the document."
+                ),
+                page_layout_table,
+                Paragraph(
+                    "Explicit pagination is a block-level decision. Insert ",
+                    code("PageBreak()"),
+                    " where the authored flow should move to the next page; generated pages can still use ",
+                    code("Theme(generated_page_breaks=True)"),
+                    " for automatic separation."
+                ),
+                CodeBlock(LAYOUT_CONTROL_SNIPPET, language="python"),
+            ),
+            Section(
+                "Figure sizing from document geometry",
+                Paragraph(
+                    "Figures accept ",
+                    code("width"),
+                    ", ",
+                    code("height"),
+                    ", or both. If only one dimension is set, renderers preserve the image aspect ratio. If both are set, the figure is placed into the explicit box."
+                ),
+                Paragraph(
+                    "For LaTeX-like sizing relative to the text block, compute the length before constructing the figure. The common pattern is ",
+                    code("width=settings.get_text_width(0.75)"),
+                    ", which reads as '75 percent of the current text width' while still producing a plain numeric width."
+                ),
+                figure_sizing_table,
+                CodeBlock(FIGURE_SIZING_SNIPPET, language="python"),
+            ),
+            Section(
                 "What changed in the default document feel",
                 Paragraph(
                     "The generated contents page now separates top-level chapters more clearly so readers can distinguish chapters, sections, and deeper levels at a glance. Captions are also kept visually closer to their table or figure so page breaks are less likely to strand a label away from the object it describes."
@@ -730,6 +811,7 @@ def build_usage_guide_document() -> Document:
                 ),
             ],
             author_layout=AuthorLayout(mode="stacked"),
+            page_margins=PageMargins.symmetric(vertical=2.0, horizontal=2.2, unit="cm"),
             theme=Theme(
                 show_page_numbers=True,
                 page_number_format="{page}",
