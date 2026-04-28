@@ -99,6 +99,18 @@ class Document:
 
         self.settings.unit = normalize_length_unit(value)
 
+    def get_page_width(self, scale: float = 1.0, *, unit: str | None = None) -> float:
+        return self.settings.get_page_width(scale, unit=unit)
+
+    def get_page_height(self, scale: float = 1.0, *, unit: str | None = None) -> float:
+        return self.settings.get_page_height(scale, unit=unit)
+
+    def get_text_width(self, scale: float = 1.0, *, unit: str | None = None) -> float:
+        return self.settings.get_text_width(scale, unit=unit)
+
+    def get_text_height(self, scale: float = 1.0, *, unit: str | None = None) -> float:
+        return self.settings.get_text_height(scale, unit=unit)
+
     @property
     def theme(self) -> Theme:
         return self.settings.theme

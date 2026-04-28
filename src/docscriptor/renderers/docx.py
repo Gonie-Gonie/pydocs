@@ -130,6 +130,7 @@ class DocxRenderer:
         context = DocxRenderContext(
             theme=document.theme,
             render_index=render_index,
+            settings=document.settings,
             unit=document.settings.unit,
             word_document=word_document,
         )
@@ -148,7 +149,8 @@ class DocxRenderer:
         if has_front_matter:
             self._render_top_level_children(word_document, front_children, context)
             if main_children:
-                word_document.add_section(WD_SECTION.NEW_PAGE)
+                section = word_document.add_section(WD_SECTION.NEW_PAGE)
+                self._configure_section_page_box(section, document.settings)
                 self._render_top_level_children(word_document, main_children, context)
         else:
             self._render_top_level_children(word_document, main_children, context)
@@ -266,6 +268,7 @@ class DocxRenderer:
             box,
             context.theme,
             context.render_index,
+            context.settings,
             context.unit,
             word_document=context.word_document,
         )
@@ -410,6 +413,8 @@ class DocxRenderer:
         footer_style.font.name = document.theme.body_font_name
         footer_style.font.size = Pt(document.theme.page_number_font_size)
         footer_style.font.color.rgb = RGBColor(0, 0, 0)
+        for section in word_document.sections:
+            self._configure_section_page_box(section, document.settings)
 
         self._configure_named_style(
             word_document,
@@ -440,6 +445,15 @@ class DocxRenderer:
         """Delegate block rendering back to the block instance itself."""
 
         block.render_to_docx(self, container, context)
+
+    def _configure_section_page_box(self, section: object, settings: object) -> None:
+        top, right, bottom, left = settings.page_margin_inches()
+        section.page_width = Inches(settings.page_width_in_inches())
+        section.page_height = Inches(settings.page_height_in_inches())
+        section.top_margin = Inches(top)
+        section.right_margin = Inches(right)
+        section.bottom_margin = Inches(bottom)
+        section.left_margin = Inches(left)
 
     def _render_top_level_children(
         self,
@@ -1003,10 +1017,11 @@ class DocxRenderer:
         box: Box,
         theme: Theme,
         render_index: RenderIndex,
+        settings: object,
         unit: str,
         *,
         word_document: WordDocument,
-        ) -> None:
+    ) -> None:
         outer_table = container.add_table(rows=1, cols=1)
         outer_table.alignment = TABLE_ALIGNMENTS[theme.box_alignment]
         cell = outer_table.rows[0].cells[0]
@@ -1033,6 +1048,7 @@ class DocxRenderer:
         context = DocxRenderContext(
             theme=theme,
             render_index=render_index,
+            settings=settings,
             unit=unit,
             word_document=word_document,
         )
@@ -1170,8 +1186,10 @@ class DocxRenderer:
             self._keep_with_next(paragraph)
         run = paragraph.add_run()
         resolved_width = figure.width_in_inches(unit)
+        resolved_height = figure.height_in_inches(unit)
         width = Inches(resolved_width) if resolved_width is not None else None
-        run.add_picture(self._figure_picture_source(figure), width=width)
+        height = Inches(resolved_height) if resolved_height is not None else None
+        run.add_picture(self._figure_picture_source(figure), width=width, height=height)
 
         if figure.caption is not None and theme.figure_caption_position == "below":
             render_caption()

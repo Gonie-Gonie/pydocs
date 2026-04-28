@@ -21,9 +21,14 @@ UNIT_TO_INCHES = {
     "pt": 1.0 / 72.0,
     "point": 1.0 / 72.0,
     "points": 1.0 / 72.0,
+    "pc": 1.0 / 6.0,
+    "pica": 1.0 / 6.0,
+    "picas": 1.0 / 6.0,
     "px": 1.0 / 96.0,
     "pixel": 1.0 / 96.0,
     "pixels": 1.0 / 96.0,
+    "twip": 1.0 / 1440.0,
+    "twips": 1.0 / 1440.0,
 }
 
 COUNTER_FORMATS = {
@@ -77,6 +82,12 @@ def length_to_inches(value: float, unit: str) -> float:
     """Convert a numeric length to inches."""
 
     return float(value) * UNIT_TO_INCHES[normalize_length_unit(unit)]
+
+
+def inches_to_length(value: float, unit: str) -> float:
+    """Convert an inch length to the requested unit."""
+
+    return float(value) / UNIT_TO_INCHES[normalize_length_unit(unit)]
 
 
 def normalize_counter_format(value: str) -> str:

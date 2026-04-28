@@ -8,7 +8,6 @@ from pathlib import Path
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
-from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle as RLParagraphStyle
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
@@ -171,9 +170,16 @@ class PdfRenderer:
 
         pdf = DocscriptorPdfTemplate(
             str(path),
-            pagesize=A4,
+            pagesize=(
+                document.settings.page_width_in_inches() * inch,
+                document.settings.page_height_in_inches() * inch,
+            ),
             title=document.title,
             author=document.author,
+            leftMargin=document.settings.page_margins.left_in_inches(document.settings.unit) * inch,
+            rightMargin=document.settings.page_margins.right_in_inches(document.settings.unit) * inch,
+            topMargin=document.settings.page_margins.top_in_inches(document.settings.unit) * inch,
+            bottomMargin=document.settings.page_margins.bottom_in_inches(document.settings.unit) * inch,
         )
         story: list[object] = []
         styles = getSampleStyleSheet()
@@ -181,6 +187,7 @@ class PdfRenderer:
         context = PdfRenderContext(
             theme=document.theme,
             render_index=render_index,
+            settings=document.settings,
             unit=document.settings.unit,
             styles=styles,
         )
@@ -331,6 +338,7 @@ class PdfRenderer:
             context.theme,
             context.styles,
             context.render_index,
+            context.settings,
             context.unit,
         )
 
@@ -799,7 +807,7 @@ class PdfRenderer:
         )
         return [table, Spacer(1, 8)]
 
-    def _render_box(self, block: Box, theme: Theme, styles: object, render_index: RenderIndex, unit: str) -> list[object]:
+    def _render_box(self, block: Box, theme: Theme, styles: object, render_index: RenderIndex, settings: object, unit: str) -> list[object]:
         body_style = self._paragraph_style(ParagraphStyle(space_after=0), theme, styles["BodyText"])
         rows: list[list[object]] = []
         row_styles: list[tuple[str, tuple[int, int], tuple[int, int], object]] = []
@@ -840,6 +848,7 @@ class PdfRenderer:
             context = PdfRenderContext(
                 theme=theme,
                 render_index=render_index,
+                settings=settings,
                 unit=unit,
                 styles=styles,
             )
@@ -928,11 +937,20 @@ class PdfRenderer:
         image = RLImage(self._figure_image_source(block))
         image.hAlign = FLOWABLE_ALIGNMENTS[theme.figure_alignment]
         resolved_width = block.width_in_inches(unit)
-        if resolved_width is not None:
+        resolved_height = block.height_in_inches(unit)
+        if resolved_width is not None and resolved_height is not None:
+            image.drawWidth = resolved_width * inch
+            image.drawHeight = resolved_height * inch
+        elif resolved_width is not None:
             target_width = resolved_width * inch
             scale = target_width / image.drawWidth
             image.drawWidth = target_width
             image.drawHeight = image.drawHeight * scale
+        elif resolved_height is not None:
+            target_height = resolved_height * inch
+            scale = target_height / image.drawHeight
+            image.drawHeight = target_height
+            image.drawWidth = image.drawWidth * scale
 
         body_style = self._paragraph_style(ParagraphStyle(space_after=0), theme, styles["BodyText"])
         elements: list[object] = [image]

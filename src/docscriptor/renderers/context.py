@@ -7,6 +7,7 @@ from typing import Any
 
 from docscriptor.layout.indexing import RenderIndex
 from docscriptor.layout.theme import Theme
+from docscriptor.settings import DocumentSettings
 
 
 @dataclass(slots=True)
@@ -15,6 +16,7 @@ class DocxRenderContext:
 
     theme: Theme
     render_index: RenderIndex
+    settings: DocumentSettings
     unit: str
     word_document: Any
 
@@ -25,6 +27,7 @@ class PdfRenderContext:
 
     theme: Theme
     render_index: RenderIndex
+    settings: DocumentSettings
     unit: str
     styles: Any
 
@@ -35,4 +38,5 @@ class HtmlRenderContext:
 
     theme: Theme
     render_index: RenderIndex
+    settings: DocumentSettings
     unit: str

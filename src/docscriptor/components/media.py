@@ -415,6 +415,7 @@ class Figure(Block):
     image_source: object
     caption: Paragraph | None
     width: float | None
+    height: float | None
     unit: str | None
     identifier: str | None
     format: str
@@ -425,6 +426,7 @@ class Figure(Block):
         image_source: PathLike | object,
         caption: CellInput | None = None,
         width: float | None = None,
+        height: float | None = None,
         identifier: str | None = None,
         *,
         unit: str | None = None,
@@ -438,6 +440,7 @@ class Figure(Block):
         )
         self.caption = coerce_cell(caption) if caption is not None else None
         self.width = width
+        self.height = height
         self.unit = normalize_length_unit(unit) if unit is not None else None
         self.identifier = identifier
         self.format = format
@@ -449,6 +452,13 @@ class Figure(Block):
         if self.width is None:
             return None
         return length_to_inches(self.width, self.unit or default_unit)
+
+    def height_in_inches(self, default_unit: str) -> float | None:
+        """Return figure height converted through the figure or document unit."""
+
+        if self.height is None:
+            return None
+        return length_to_inches(self.height, self.unit or default_unit)
 
     def render_to_docx(
         self,

@@ -58,6 +58,7 @@ class HtmlRenderer:
         context = HtmlRenderContext(
             theme=document.theme,
             render_index=render_index,
+            settings=document.settings,
             unit=document.settings.unit,
         )
         front_children, main_children = document.split_top_level_children()
@@ -107,7 +108,7 @@ class HtmlRenderer:
                 f"  <title>{escape(document.title)}</title>",
                 f"  <meta name=\"description\" content=\"{escape(document.summary or document.title)}\" />",
                 "  <style>",
-                self._stylesheet(document.theme),
+                self._stylesheet(document.settings),
                 "  </style>",
                 "</head>",
                 "<body>",
@@ -339,8 +340,20 @@ class HtmlRenderer:
 
         image_style = ""
         resolved_width = block.width_in_inches(context.unit)
+        resolved_height = block.height_in_inches(context.unit)
+        image_styles = []
         if resolved_width is not None:
-            image_style = f' style="max-width: {resolved_width:.2f}in; width: 100%;"'
+            image_styles.append(f"width: {resolved_width:.2f}in")
+            image_styles.append("max-width: 100%")
+        if resolved_height is not None:
+            image_styles.append(f"height: {resolved_height:.2f}in")
+            image_styles.append("max-height: 100%")
+        if resolved_width is None and resolved_height is not None:
+            image_styles.append("width: auto")
+        if resolved_height is None:
+            image_styles.append("height: auto")
+        if image_styles:
+            image_style = f' style="{"; ".join(image_styles)};"'
         image_html = (
             f'<img class="docscriptor-figure-image" src="{self._figure_src(block)}" '
             f'alt="{escape(block.caption.plain_text() if block.caption is not None else "Figure")}"{image_style} />'
@@ -752,6 +765,7 @@ class HtmlRenderer:
                 HtmlRenderContext(
                     theme=context.theme,
                     render_index=context.render_index,
+                    settings=context.settings,
                     unit=context.unit,
                 ),
             )
@@ -1161,7 +1175,11 @@ class HtmlRenderer:
         escaped_name = font_name.replace('"', '\\"')
         return f'"{escaped_name}", {fallback}'
 
-    def _stylesheet(self, theme: Theme) -> str:
+    def _stylesheet(self, settings: object) -> str:
+        theme = settings.theme
+        margin_top, margin_right, margin_bottom, margin_left = settings.page_margin_inches()
+        page_width = settings.page_width_in_inches()
+        text_width = settings.text_width_in_inches()
         page_break_before = (
             "break-before: page; page-break-before: always;"
             if theme.generated_page_breaks
@@ -1171,6 +1189,10 @@ class HtmlRenderer:
 :root {{
   color-scheme: light;
 }}
+@page {{
+  size: {page_width:.2f}in {settings.page_height_in_inches():.2f}in;
+  margin: {margin_top:.2f}in {margin_right:.2f}in {margin_bottom:.2f}in {margin_left:.2f}in;
+}}
 body {{
   margin: 0;
   background: #{theme.page_background_color};
@@ -1179,9 +1201,16 @@ body {{
   font-size: {theme.body_font_size:.1f}pt;
 }}
 .docscriptor-document {{
-  max-width: 8.5in;
+  max-width: {page_width:.2f}in;
   margin: 0 auto;
-  padding: 32px 24px 48px;
+  padding: {margin_top:.2f}in {margin_right:.2f}in {margin_bottom:.2f}in {margin_left:.2f}in;
+  box-sizing: border-box;
+}}
+.docscriptor-title-matter,
+.docscriptor-front-matter,
+.docscriptor-main-matter,
+.docscriptor-generated-page {{
+  max-width: {text_width:.2f}in;
 }}
 .docscriptor-title-matter,
 .docscriptor-front-matter,

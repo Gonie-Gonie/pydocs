@@ -17,6 +17,7 @@ from pypdf import PdfReader
 
 import docscriptor.components.generated as generated_components
 import docscriptor.components.inline as inline_components
+from docscriptor.core import length_to_inches
 from docscriptor.layout.indexing import build_render_index
 from docscriptor import (
     Affiliation,
@@ -41,6 +42,8 @@ from docscriptor import (
     ListStyle,
     Math,
     NumberedList,
+    PageMargins,
+    PageSize,
     PageBreak,
     PageBreaker,
     Paragraph,
@@ -431,6 +434,8 @@ def test_public_api_prefers_classes_for_structural_nodes() -> None:
     assert hasattr(docscriptor, "NumberedList")
     assert hasattr(docscriptor, "PageBreak")
     assert hasattr(docscriptor, "PageBreaker")
+    assert hasattr(docscriptor, "PageMargins")
+    assert hasattr(docscriptor, "PageSize")
     assert hasattr(docscriptor, "TableList")
     assert hasattr(docscriptor, "FigureList")
     assert hasattr(docscriptor, "cite")
@@ -563,7 +568,15 @@ def test_document_accepts_document_settings() -> None:
     assert document.settings.author_layout.mode == "stacked"
     assert document.cover_page is True
     assert document.unit == "cm"
+    assert round(document.get_text_width(), 2) == 15.92
     assert document.theme.show_page_numbers is True
+
+
+def test_print_units_include_common_document_units() -> None:
+    assert round(length_to_inches(25.4, "mm"), 8) == 1.0
+    assert length_to_inches(6, "pc") == 1.0
+    assert length_to_inches(1440, "twip") == 1.0
+    assert length_to_inches(72, "pt") == 1.0
 
 
 def test_document_unit_applies_to_media_dimensions(tmp_path: Path) -> None:
@@ -595,7 +608,33 @@ def test_document_unit_applies_to_media_dimensions(tmp_path: Path) -> None:
     html_text = html_path.read_text(encoding="utf-8")
     assert 'style="width: 1.00in;"' in html_text
     assert 'style="width: 2.00in;"' in html_text
-    assert 'max-width: 1.00in' in html_text
+    assert 'width: 1.00in; max-width: 100%; height: auto' in html_text
+
+
+def test_page_size_and_margins_render_to_all_outputs(tmp_path: Path) -> None:
+    settings = DocumentSettings(
+        unit="cm",
+        page_size=PageSize(20, 10, unit="cm"),
+        page_margins=PageMargins.symmetric(vertical=1.5, horizontal=2.0, unit="cm"),
+    )
+    document = Document("Margins", Paragraph("Body"), settings=settings)
+
+    docx_path = tmp_path / "margins.docx"
+    pdf_path = tmp_path / "margins.pdf"
+    html_path = tmp_path / "margins.html"
+    document.save_docx(docx_path)
+    document.save_pdf(pdf_path)
+    document.save_html(html_path)
+
+    word_section = WordDocument(docx_path).sections[0]
+    assert abs(int(word_section.page_width) - int(20 / 2.54 * 914400)) <= 300
+    assert abs(int(word_section.left_margin) - int(2 / 2.54 * 914400)) <= 300
+    pdf_page = PdfReader(BytesIO(pdf_path.read_bytes())).pages[0]
+    assert round(float(pdf_page.mediabox.width), 1) == round(20 / 2.54 * 72, 1)
+    html_text = html_path.read_text(encoding="utf-8")
+    assert "size: 7.87in 3.94in;" in html_text
+    assert "margin: 0.59in 0.79in 0.59in 0.79in;" in html_text
+    assert "max-width: 6.30in;" in html_text
 
 
 def test_object_unit_overrides_document_unit(tmp_path: Path) -> None:
@@ -620,7 +659,35 @@ def test_object_unit_overrides_document_unit(tmp_path: Path) -> None:
 
     html_text = html_path.read_text(encoding="utf-8")
     assert 'style="width: 1.00in;"' in html_text
-    assert 'max-width: 1.00in' in html_text
+    assert 'width: 1.00in; max-width: 100%; height: auto' in html_text
+
+
+def test_figure_height_and_text_width_helpers_render(tmp_path: Path) -> None:
+    image_path = tmp_path / "sample.png"
+    _write_sample_image(image_path)
+    settings = DocumentSettings(
+        unit="cm",
+        page_size=PageSize.a4(),
+        page_margins=PageMargins.all(2.0, unit="cm"),
+    )
+    figure = Figure(
+        image_path,
+        width=settings.get_text_width(0.5),
+        height=3.0,
+    )
+    document = Document("Figure Size", figure, settings=settings)
+
+    docx_path = tmp_path / "figure-size.docx"
+    html_path = tmp_path / "figure-size.html"
+    document.save_docx(docx_path)
+    document.save_html(html_path)
+
+    shape = WordDocument(docx_path).inline_shapes[0]
+    assert abs(int(shape.width) - int((settings.text_width_in_inches() * 0.5) * 914400)) <= 1
+    assert abs(int(shape.height) - int((3.0 / 2.54) * 914400)) <= 1
+    html_text = html_path.read_text(encoding="utf-8")
+    assert "width: 3.35in" in html_text
+    assert "height: 1.18in" in html_text
 
 
 def test_auto_footnotes_page_can_be_disabled(tmp_path: Path) -> None:
