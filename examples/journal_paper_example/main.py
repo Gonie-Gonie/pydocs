@@ -296,21 +296,21 @@ def build_journal_paper_document() -> Document:
         caption=Paragraph(
             "Traceability pipeline used in the study, linking evidence sources, authored structure, checks, and submission outputs."
         ),
-        width_inches=6.2,
+        width=6.2,
     )
     quality_latency_figure = Figure(
         build_quality_latency_figure(results_df),
         caption=Paragraph(
             "Quality-latency frontier derived directly from the benchmark CSV used in the manuscript."
         ),
-        width_inches=6.0,
+        width=6.0,
     )
     revision_effort_figure = Figure(
         build_revision_effort_figure(),
         caption=Paragraph(
             "Estimated late-revision synchronization effort comparing manual workflows with a docscriptor-based workflow."
         ),
-        width_inches=6.0,
+        width=6.0,
     )
 
     return Document(

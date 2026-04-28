@@ -752,13 +752,13 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
     preview_figure = Figure(
         image_path,
         caption=Paragraph("Tiny sample image."),
-        width_inches=1.0,
+        width=1.0,
     )
     figure_object = FakeFigure(_build_sample_png(width=320, height=180))
     preview_figure_second = Figure(
         figure_object,
         caption=Paragraph("Second tiny sample image."),
-        width_inches=1.2,
+        width=1.2,
     )
     boxed_detail = Box(
         Paragraph("A boxed paragraph can live alongside nested objects."),
@@ -769,7 +769,7 @@ def test_document_renders_to_docx_and_pdf(tmp_path: Path) -> None:
         ),
         Figure(
             image_path,
-            width_inches=0.7,
+            width=0.7,
         ),
         title="Review Box",
         style=BoxStyle(

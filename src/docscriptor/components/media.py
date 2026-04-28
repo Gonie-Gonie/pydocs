@@ -425,34 +425,23 @@ class Figure(Block):
         image_source: PathLike | object,
         caption: CellInput | None = None,
         width: float | None = None,
-        width_inches: float | None = None,
         identifier: str | None = None,
         *,
         unit: str | None = None,
         format: str = "png",
         dpi: int | None = 150,
     ) -> None:
-        if width is not None and width_inches is not None:
-            raise ValueError("Pass either width=... or width_inches=..., not both")
         self.image_source = (
             Path(image_source)
             if isinstance(image_source, (str, Path))
             else image_source
         )
         self.caption = coerce_cell(caption) if caption is not None else None
-        self.width = width_inches if width_inches is not None else width
-        self.unit = "in" if width_inches is not None else (normalize_length_unit(unit) if unit is not None else None)
+        self.width = width
+        self.unit = normalize_length_unit(unit) if unit is not None else None
         self.identifier = identifier
         self.format = format
         self.dpi = dpi
-
-    @property
-    def width_inches(self) -> float | None:
-        """Return the locally specified width in inches when possible."""
-
-        if self.width is None:
-            return None
-        return length_to_inches(self.width, self.unit or "in")
 
     def width_in_inches(self, default_unit: str) -> float | None:
         """Return figure width converted through the figure or document unit."""

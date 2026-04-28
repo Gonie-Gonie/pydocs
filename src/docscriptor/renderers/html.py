@@ -338,9 +338,9 @@ class HtmlRenderer:
         """Render a figure block into HTML."""
 
         image_style = ""
-        width_inches = block.width_in_inches(context.unit)
-        if width_inches is not None:
-            image_style = f' style="max-width: {width_inches:.2f}in; width: 100%;"'
+        resolved_width = block.width_in_inches(context.unit)
+        if resolved_width is not None:
+            image_style = f' style="max-width: {resolved_width:.2f}in; width: 100%;"'
         image_html = (
             f'<img class="docscriptor-figure-image" src="{self._figure_src(block)}" '
             f'alt="{escape(block.caption.plain_text() if block.caption is not None else "Figure")}"{image_style} />'

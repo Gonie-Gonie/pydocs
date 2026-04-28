@@ -1169,8 +1169,8 @@ class DocxRenderer:
         if figure.caption is not None and theme.figure_caption_position == "below":
             self._keep_with_next(paragraph)
         run = paragraph.add_run()
-        width_inches = figure.width_in_inches(unit)
-        width = Inches(width_inches) if width_inches is not None else None
+        resolved_width = figure.width_in_inches(unit)
+        width = Inches(resolved_width) if resolved_width is not None else None
         run.add_picture(self._figure_picture_source(figure), width=width)
 
         if figure.caption is not None and theme.figure_caption_position == "below":

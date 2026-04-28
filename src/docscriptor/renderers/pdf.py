@@ -927,9 +927,9 @@ class PdfRenderer:
     def _render_figure(self, block: Figure, theme: Theme, styles: object, render_index: RenderIndex, unit: str) -> list[object]:
         image = RLImage(self._figure_image_source(block))
         image.hAlign = FLOWABLE_ALIGNMENTS[theme.figure_alignment]
-        width_inches = block.width_in_inches(unit)
-        if width_inches is not None:
-            target_width = width_inches * inch
+        resolved_width = block.width_in_inches(unit)
+        if resolved_width is not None:
+            target_width = resolved_width * inch
             scale = target_width / image.drawWidth
             image.drawWidth = target_width
             image.drawHeight = image.drawHeight * scale

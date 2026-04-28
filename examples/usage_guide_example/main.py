@@ -366,27 +366,27 @@ def build_renderer_behavior_figure():
 def build_usage_guide_document() -> Document:
     """Build a detailed reference-style usage guide."""
 
-    logo_figure = Figure(LOGO_PATH, width_inches=1.8)
+    logo_figure = Figure(LOGO_PATH, width=1.8)
     pipeline_figure = Figure(
         build_pipeline_figure(),
         caption=Paragraph(
             "Core authoring pipeline from project inputs to synchronized DOCX, PDF, and HTML outputs."
         ),
-        width_inches=6.5,
+        width=6.5,
     )
     author_layout_figure = Figure(
         build_author_layout_figure(),
         caption=Paragraph(
             "Three practical author-display strategies: journal-style default, stacked guide profiles, and fully manual front matter."
         ),
-        width_inches=6.5,
+        width=6.5,
     )
     renderer_behavior_figure = Figure(
         build_renderer_behavior_figure(),
         caption=Paragraph(
             "Renderer-specific behavior for notes, review workflows, and cross-reference stability."
         ),
-        width_inches=6.5,
+        width=6.5,
     )
 
     navigation_table = Table(
