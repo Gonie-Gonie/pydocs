@@ -325,10 +325,30 @@ def test_paragraph_style_defaults_to_justify_alignment() -> None:
 def test_theme_defaults_center_media_objects_and_captions() -> None:
     theme = Theme()
 
+    assert theme.page_background_color == "FFFFFF"
     assert theme.caption_alignment == "center"
     assert theme.table_alignment == "center"
     assert theme.figure_alignment == "center"
     assert theme.box_alignment == "center"
+
+
+def test_page_background_color_renders_to_all_outputs(tmp_path: Path) -> None:
+    document = Document(
+        "Color Test",
+        Paragraph("Tinted page."),
+        settings=DocumentSettings(theme=Theme(page_background_color="#F4F8FC")),
+    )
+    docx_path = tmp_path / "color.docx"
+    pdf_path = tmp_path / "color.pdf"
+    html_path = tmp_path / "color.html"
+
+    document.save_docx(docx_path)
+    document.save_pdf(pdf_path)
+    document.save_html(html_path)
+
+    assert 'w:background w:color="F4F8FC"' in _docx_document_xml(docx_path)
+    assert b".956863 .972549 .988235 rg" in _pdf_content_bytes(pdf_path)
+    assert "background: #F4F8FC;" in html_path.read_text(encoding="utf-8")
 
 
 def test_numbering_and_list_styles_are_customizable() -> None:

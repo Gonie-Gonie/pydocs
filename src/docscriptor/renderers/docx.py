@@ -412,6 +412,7 @@ class DocxRenderer:
                 bold=bold,
                 italic=italic,
             )
+        self._set_page_background(word_document, document.theme.page_background_color)
 
     def _render_block(
         self,
@@ -1159,6 +1160,15 @@ class DocxRenderer:
         shading.set(qn("w:color"), "auto")
         shading.set(qn("w:fill"), fill)
         paragraph_properties.append(shading)
+
+    def _set_page_background(self, word_document: WordDocument, fill: str) -> None:
+        document_element = word_document._element
+        existing = document_element.find(qn("w:background"))
+        if existing is not None:
+            document_element.remove(existing)
+        background = OxmlElement("w:background")
+        background.set(qn("w:color"), fill)
+        document_element.insert(0, background)
 
     def _set_cell_shading(self, cell: object, fill: str) -> None:
         properties = cell._tc.get_or_add_tcPr()

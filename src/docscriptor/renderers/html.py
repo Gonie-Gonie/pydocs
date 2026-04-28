@@ -1159,7 +1159,7 @@ class HtmlRenderer:
 }}
 body {{
   margin: 0;
-  background: linear-gradient(180deg, #f3f0e8 0%, #ece6da 100%);
+  background: #{theme.page_background_color};
   color: #1e2329;
   font-family: {self._css_font_family(theme.body_font_name)};
   font-size: {theme.body_font_size:.1f}pt;

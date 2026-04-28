@@ -16,14 +16,17 @@ This file is the shared memory for ongoing work on this repository. Keep it read
 - Journal-style and usage-guide examples are important living specifications. They should stay realistic and readable.
 - Cross-renderer consistency matters more than perfect renderer-specific fidelity.
 
-## User Requests To Remember
+## Active Work Memory
 
 - Keep this shared note file and include the instruction to keep updating it.
-- Add page color support.
-- Add an explicit page break feature. Possible names discussed: `break_page` method or `PageBreaker()` instance. Prefer an object component if it fits the existing block model.
-- Add unit support beyond inches, including centimeters. Objects should support units locally, and the whole document should also be able to set an overall unit. If that exists, arguments such as `width_inches` can move toward clearer `width` names.
+- Keep active task details in commit messages, tests, examples, and PR notes rather than preserving every short-lived implementation idea here.
 
 ## API Compatibility Notes
 
-- Existing names such as `width_inches` should remain usable while introducing newer, unit-aware names.
-- Prefer document-level defaults through `DocumentSettings` so authors can make unit choices once and still override locally where needed.
+- Existing public names should remain usable when introducing newer, clearer APIs.
+- Prefer document-level defaults through `DocumentSettings` when a setting should apply consistently across renderers.
+
+## Local Environment Notes
+
+- This project requires Python 3.14. On this Windows machine, use `py -3.14 ...`.
+- `pytest` may not be on PATH. Prefer `py -3.14 -m pytest ...` for test commands.

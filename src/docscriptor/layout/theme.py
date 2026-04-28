@@ -177,6 +177,7 @@ class TableStyle:
 class Theme:
     """Document-wide renderer defaults."""
 
+    page_background_color: str = "FFFFFF"
     body_font_name: str = "Times New Roman"
     monospace_font_name: str = "Courier New"
     title_font_size: float = 22.0
@@ -219,6 +220,7 @@ class Theme:
     numbered_list_style: ListStyle = field(default_factory=ListStyle)
 
     def __post_init__(self) -> None:
+        self.page_background_color = normalize_color(self.page_background_color) or "FFFFFF"
         if self.caption_alignment not in {"left", "center", "right", "justify"}:
             raise ValueError(
                 f"Unsupported caption alignment: {self.caption_alignment!r}"

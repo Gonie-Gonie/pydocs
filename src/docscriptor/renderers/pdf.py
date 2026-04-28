@@ -202,8 +202,8 @@ class PdfRenderer:
         if self._should_auto_render_footnotes_page(document, render_index):
             story.extend(self.render_footnotes_page(FootnotesPage(), context))
 
-        if document.theme.show_page_numbers:
-            page_callback = self._page_number_callback(
+        if document.theme.show_page_numbers or document.theme.page_background_color != "FFFFFF":
+            page_callback = self._page_callback(
                 document.theme,
                 has_front_matter=has_front_matter,
             )
@@ -1569,11 +1569,17 @@ class PdfRenderer:
         story.append(Spacer(1, 6))
         return story
 
-    def _page_number_callback(self, theme: Theme, *, has_front_matter: bool):
+    def _page_callback(self, theme: Theme, *, has_front_matter: bool):
         font_name = self._resolve_font(theme.body_font_name, False, False)
 
-        def draw_page_number(canvas: object, doc: object) -> None:
+        def draw_page(canvas: object, doc: object) -> None:
             canvas.saveState()
+            if theme.page_background_color != "FFFFFF":
+                canvas.setFillColor(colors.HexColor(f"#{theme.page_background_color}"))
+                canvas.rect(0, 0, doc.pagesize[0], doc.pagesize[1], fill=1, stroke=0)
+            if not theme.show_page_numbers:
+                canvas.restoreState()
+                return
             canvas.setFont(font_name, theme.page_number_font_size)
             current_page = canvas.getPageNumber()
             main_start_page = getattr(doc, "main_matter_start_page", None)
@@ -1598,7 +1604,7 @@ class PdfRenderer:
                 canvas.drawCentredString(doc.pagesize[0] / 2, y, text)
             canvas.restoreState()
 
-        return draw_page_number
+        return draw_page
 
     def _comment_marker(self, fragment: Comment, render_index: RenderIndex) -> str:
         return f"[{render_index.comment_number(fragment)}]"
