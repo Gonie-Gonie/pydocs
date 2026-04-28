@@ -46,6 +46,7 @@ from docscriptor import (
     TableOfContents,
     Text,
     Theme,
+    TocLevelStyle,
     bold,
     code,
     color,
@@ -141,6 +142,20 @@ figure = Figure(
     "assets/system-diagram.png",
     width=settings.get_text_width(0.75),
     height=8.0,
+)
+"""
+
+CONTENTS_CONTROL_SNIPPET = """from docscriptor import TableOfContents, TocLevelStyle
+
+contents = TableOfContents(
+    show_page_numbers=True,
+    leader=".",
+    max_level=3,
+    level_styles={
+        1: TocLevelStyle(bold=True, space_before=8, space_after=6),
+        2: TocLevelStyle(bold=True, space_before=2, space_after=3),
+        3: TocLevelStyle(indent=0.48, font_size_delta=-0.2),
+    },
 )
 """
 
@@ -475,6 +490,17 @@ def build_usage_guide_document() -> Document:
         caption="Page layout controls shared across renderers.",
         column_widths=[1.7, 2.6, 2.6],
     )
+    contents_style_table = Table(
+        headers=["Concern", "Default", "Customization path"],
+        rows=[
+            ["Page numbers", "Shown by default with right-aligned page labels.", "Set TableOfContents(show_page_numbers=False) to hide them."],
+            ["Leader dots", "Dotted leaders connect the heading text to the page number.", "Set leader='' for no leader or another short string for a different visual cue."],
+            ["Heading depth", "All numbered headings are included.", "Set max_level=2 or max_level=3 for shorter contents pages."],
+            ["Hierarchy styling", "Level 1 and 2 entries are emphasized and spaced more strongly than deeper entries.", "Pass level_styles={level: TocLevelStyle(...)} for per-level spacing, indentation, and emphasis."],
+        ],
+        caption="Table-of-contents defaults and customization options.",
+        column_widths=[1.6, 2.7, 2.7],
+    )
     figure_sizing_table = Table(
         headers=["Figure intent", "Pattern", "Renderer behavior"],
         rows=[
@@ -735,6 +761,19 @@ def build_usage_guide_document() -> Document:
                     " for automatic separation."
                 ),
                 CodeBlock(LAYOUT_CONTROL_SNIPPET, language="python"),
+            ),
+            Section(
+                "Contents hierarchy and page labels",
+                Paragraph(
+                    "The generated contents page uses hierarchy-aware spacing and emphasis by default. It also renders page labels with dotted leaders, which is the common book/report convention where the entry text sits on the left and the page number aligns on the right."
+                ),
+                Paragraph(
+                    "Use ",
+                    code("TableOfContents"),
+                    " options when the document needs a shorter outline, no page numbers, or a different per-level visual rhythm."
+                ),
+                contents_style_table,
+                CodeBlock(CONTENTS_CONTROL_SNIPPET, language="python"),
             ),
             Section(
                 "Figure sizing from document geometry",

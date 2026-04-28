@@ -93,15 +93,18 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert any("PageMargins" in text for text in paragraph_texts)
     assert any("PageBreak()" in text for text in paragraph_texts)
     assert any("settings.get_text_width(0.75)" in text for text in paragraph_texts)
+    assert any("TableOfContents" in text for text in paragraph_texts)
+    assert any("TocLevelStyle" in text for text in paragraph_texts)
     assert any("A reading map for the guide." in text for text in paragraph_texts)
     assert any("Page layout controls shared across renderers." in text for text in paragraph_texts)
+    assert any("Table-of-contents defaults and customization options." in text for text in paragraph_texts)
     assert any("Figure sizing patterns for width, height, and document-relative sizing." in text for text in paragraph_texts)
     assert any("Renderer-specific behavior for notes, review workflows, and cross-reference stability." in text for text in paragraph_texts)
     assert any("portable footnotes exactly where the text appears." in text for text in paragraph_texts)
     assert any("github.com/Gonie-Gonie/docscriptor" in text for text in paragraph_texts)
     assert any("The journal example at examples/journal_paper_example/main.py" in text for text in paragraph_texts)
     assert "Footnotes" not in [text for text in paragraph_texts if text == "Footnotes"]
-    assert len(word_document.tables) == 9
+    assert len(word_document.tables) == 10
     assert len(word_document.inline_shapes) == 4
     assert len(word_document.comments) == 2
     assert next(paragraph.style.name for paragraph in word_document.paragraphs if paragraph.text == "Comments") == "Heading 2"
@@ -125,8 +128,11 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert "PageMargins" in pdf_text
     assert "PageBreak()" in pdf_text
     assert "settings.get_text_width(0.75)" in pdf_text
+    assert "TableOfContents" in pdf_text
+    assert "TocLevelStyle" in pdf_text
     assert "A reading map for the guide." in pdf_text
     assert "Page layout controls shared across renderers." in pdf_text
+    assert "Table-of-contents defaults and customization options." in pdf_text
     assert "Figure sizing patterns for width, height, and document-relative sizing." in pdf_text
     assert "Renderer-specific behavior for notes, review workflows, and cross-reference stability." in pdf_text
     assert "Portable footnotes are authored inline" in pdf_text
@@ -146,8 +152,11 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert "PageMargins" in normalized_html_text
     assert "PageBreak()" in normalized_html_text
     assert "settings.get_text_width(0.75)" in normalized_html_text
+    assert "TableOfContents" in normalized_html_text
+    assert "TocLevelStyle" in normalized_html_text
     assert "CommentsPage() collects these review notes onto a dedicated generated page." in normalized_html_text
     assert "Page layout controls shared across renderers." in normalized_html_text
+    assert "Table-of-contents defaults and customization options." in normalized_html_text
     assert "Figure sizing patterns for width, height, and document-relative sizing." in normalized_html_text
     assert "Portable footnotes are authored inline" in normalized_html_text
     assert "github.com/Gonie-Gonie/docscriptor" in normalized_html_text

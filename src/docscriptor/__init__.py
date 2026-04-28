@@ -17,7 +17,7 @@ from docscriptor.components.blocks import (
     Subsection,
     Subsubsection,
 )
-from docscriptor.components.generated import CommentsPage, FigureList, ReferencesPage, TableList, TableOfContents
+from docscriptor.components.generated import CommentsPage, FigureList, ReferencesPage, TableList, TableOfContents, TocLevelStyle
 from docscriptor.components.media import Figure, Table, TableCell
 from docscriptor.components.markup import md, markup
 from docscriptor.components.people import Affiliation, Author, AuthorLayout
@@ -113,6 +113,7 @@ __all__ = [
     "Text",
     "TextStyle",
     "Theme",
+    "TocLevelStyle",
     "__version__",
     "bold",
     "code",

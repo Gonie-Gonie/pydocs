@@ -8,7 +8,7 @@ from pathlib import Path
 from docx import Document as WordDocument
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.section import WD_SECTION
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT, WD_TAB_LEADER
 from docx.enum.text import WD_BREAK
 from docx.opc.constants import CONTENT_TYPE as CT
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
@@ -37,6 +37,7 @@ from docscriptor.components.generated import (
     ReferencesPage,
     TableList,
     TableOfContents,
+    TocLevelStyle,
 )
 from docscriptor.components.inline import (
     _BlockReference,
@@ -324,9 +325,8 @@ class DocxRenderer:
 
         self._render_table_of_contents(
             context.word_document,
-            block.title,
-            context.theme,
-            context.render_index,
+            block,
+            context,
         )
 
     def render_table_list(
@@ -1406,24 +1406,60 @@ class DocxRenderer:
     def _render_table_of_contents(
         self,
         word_document: WordDocument,
-        title: list[Text] | None,
-        theme: Theme,
-        render_index: RenderIndex,
+        block: TableOfContents,
+        context: DocxRenderContext,
     ) -> None:
-        self._add_heading(word_document, title or [Text(theme.contents_title)], level=theme.generated_section_level, theme=theme, number_label=None)
+        theme = context.theme
+        render_index = context.render_index
+        self._add_heading(word_document, block.title or [Text(theme.contents_title)], level=theme.generated_section_level, theme=theme, number_label=None)
         for entry in render_index.headings:
+            if not block.includes_level(entry.level):
+                continue
+            toc_style = self._toc_level_style(block, entry.level)
             paragraph = word_document.add_paragraph()
-            paragraph.paragraph_format.left_indent = Inches(0.24 * max(entry.level - 1, 0))
-            paragraph.paragraph_format.space_before = Pt(8 if entry.level == 1 else (2 if entry.level == 2 else 0))
-            paragraph.paragraph_format.space_after = Pt(6 if entry.level == 1 else 3)
+            paragraph.paragraph_format.left_indent = Inches(toc_style.indent)
+            paragraph.paragraph_format.space_before = Pt(toc_style.space_before)
+            paragraph.paragraph_format.space_after = Pt(toc_style.space_after)
+            if block.show_page_numbers:
+                text_width = context.settings.text_width_in_inches()
+                paragraph.paragraph_format.tab_stops.add_tab_stop(
+                    Inches(text_width),
+                    WD_TAB_ALIGNMENT.RIGHT,
+                    WD_TAB_LEADER.DOTS if block.leader == "." else WD_TAB_LEADER.SPACES,
+                )
             self._append_hyperlink_runs(
                 paragraph,
                 entry.anchor,
                 self._heading_fragments(entry.title, entry.number),
                 internal=True,
-                style=TextStyle(bold=True if entry.level == 1 else None),
-                default_size=theme.body_font_size + (0.5 if entry.level == 1 else 0),
+                style=TextStyle(
+                    bold=toc_style.bold,
+                    italic=toc_style.italic,
+                ),
+                default_size=theme.body_font_size + toc_style.font_size_delta,
             )
+            if block.show_page_numbers and entry.anchor is not None:
+                paragraph.add_run("\t")
+                self._append_pageref_field(paragraph, entry.anchor)
+
+    def _toc_level_style(self, block: TableOfContents, level: int) -> TocLevelStyle:
+        defaults = TocLevelStyle(
+            indent=0.24 * max(level - 1, 0),
+            space_before=8 if level == 1 else (2 if level == 2 else 0),
+            space_after=6 if level == 1 else 3,
+            font_size_delta=0.6 if level == 1 else 0,
+            bold=True if level == 1 else (True if level == 2 else False),
+            italic=False,
+        )
+        override = block.style_for_level(level)
+        return TocLevelStyle(
+            indent=defaults.indent if override.indent is None else override.indent,
+            space_before=defaults.space_before if override.space_before is None else override.space_before,
+            space_after=defaults.space_after if override.space_after is None else override.space_after,
+            font_size_delta=defaults.font_size_delta if override.font_size_delta is None else override.font_size_delta,
+            bold=defaults.bold if override.bold is None else override.bold,
+            italic=defaults.italic if override.italic is None else override.italic,
+        )
 
     def _configure_page_number_sections(
         self,
@@ -1527,6 +1563,16 @@ class DocxRenderer:
     def _append_page_number_field(self, paragraph: object) -> None:
         field = OxmlElement("w:fldSimple")
         field.set(qn("w:instr"), "PAGE")
+        run = OxmlElement("w:r")
+        text = OxmlElement("w:t")
+        text.text = "1"
+        run.append(text)
+        field.append(run)
+        paragraph._p.append(field)
+
+    def _append_pageref_field(self, paragraph: object, anchor: str) -> None:
+        field = OxmlElement("w:fldSimple")
+        field.set(qn("w:instr"), f"PAGEREF {anchor} \\h")
         run = OxmlElement("w:r")
         text = OxmlElement("w:t")
         text.text = "1"

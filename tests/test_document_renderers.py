@@ -59,6 +59,7 @@ from docscriptor import (
     TableList,
     Text,
     Theme,
+    TocLevelStyle,
     bold,
     code,
     color,
@@ -448,6 +449,7 @@ def test_public_api_prefers_classes_for_structural_nodes() -> None:
     assert hasattr(docscriptor, "TableStyle")
     assert hasattr(docscriptor, "Figure")
     assert hasattr(docscriptor, "TableOfContents")
+    assert hasattr(docscriptor, "TocLevelStyle")
     assert hasattr(docscriptor, "Comment")
     assert hasattr(docscriptor, "CommentsPage")
     assert hasattr(docscriptor, "Footnote")
@@ -518,6 +520,56 @@ def test_explicit_page_break_renders_to_all_outputs(tmp_path: Path) -> None:
     assert '<w:br w:type="page"/>' in _docx_document_xml(docx_path)
     assert len(PdfReader(BytesIO(pdf_path.read_bytes())).pages) >= 2
     assert 'class="docscriptor-page-break"' in html_path.read_text(encoding="utf-8")
+
+
+def test_table_of_contents_uses_page_numbers_and_leaders_by_default(tmp_path: Path) -> None:
+    document = Document(
+        "TOC Test",
+        TableOfContents(),
+        Chapter("One", Section("Two", Paragraph("Body"))),
+    )
+
+    docx_path = tmp_path / "toc.docx"
+    pdf_path = tmp_path / "toc.pdf"
+    html_path = tmp_path / "toc.html"
+    document.save_docx(docx_path)
+    document.save_pdf(pdf_path)
+    document.save_html(html_path)
+
+    docx_xml = _docx_document_xml(docx_path)
+    pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf_path.read_bytes())).pages)
+    html_text = html_path.read_text(encoding="utf-8")
+
+    assert "PAGEREF heading_" in docx_xml
+    assert 'w:leader="dot"' in docx_xml
+    assert ".  .  ." in pdf_text
+    assert 'class="docscriptor-toc-page-number"' in html_text
+    assert "target-counter(attr(data-target), page)" in html_text
+
+
+def test_table_of_contents_options_can_hide_pages_and_limit_depth(tmp_path: Path) -> None:
+    document = Document(
+        "TOC Options",
+        TableOfContents(
+            show_page_numbers=False,
+            max_level=1,
+            level_styles={1: TocLevelStyle(bold=False, space_after=1)},
+        ),
+        Chapter("One", Section("Two", Paragraph("Body"))),
+    )
+
+    docx_path = tmp_path / "toc-options.docx"
+    html_path = tmp_path / "toc-options.html"
+    document.save_docx(docx_path)
+    document.save_html(html_path)
+
+    docx_xml = _docx_document_xml(docx_path)
+    html_text = html_path.read_text(encoding="utf-8")
+
+    assert "PAGEREF heading_" not in docx_xml
+    assert 'class="docscriptor-toc-page-number"' not in html_text
+    assert 'class="docscriptor-toc-entry docscriptor-toc-entry-level-1"' in html_text
+    assert 'class="docscriptor-toc-entry docscriptor-toc-entry-level-2"' not in html_text
 
 
 def test_bibtex_string_creates_citation_library() -> None:

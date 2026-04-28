@@ -25,6 +25,7 @@ from docscriptor.components.generated import (
     ReferencesPage,
     TableList,
     TableOfContents,
+    TocLevelStyle,
 )
 from docscriptor.components.inline import (
     _BlockReference,
@@ -504,27 +505,60 @@ class HtmlRenderer:
         """Render the generated table of contents into HTML."""
 
         entries = "".join(
-            (
-                f'<div class="docscriptor-toc-entry docscriptor-toc-entry-level-{entry.level}" '
-                f'style="margin-left: {max(entry.level - 1, 0) * 18:.1f}px;">'
-                + self._link_html(
-                    entry.anchor,
-                    self._inline_html(
-                        self._heading_fragments(entry.title, entry.number),
-                        context.theme,
-                        context.render_index,
-                    ),
-                    internal=True,
-                )
-                + "</div>"
-            )
+            self._toc_entry_html(block, entry, context)
             for entry in context.render_index.headings
+            if block.includes_level(entry.level)
         )
         return self._generated_page_html(
             title=block.title or [Text(context.theme.contents_title)],
             body='<nav class="docscriptor-toc">' + entries + "</nav>",
             context=context,
             section_class="docscriptor-generated-page docscriptor-toc-page",
+        )
+
+    def _toc_entry_html(
+        self,
+        block: TableOfContents,
+        entry: object,
+        context: HtmlRenderContext,
+    ) -> str:
+        toc_style = self._toc_level_style(block, entry.level)
+        anchor_href = f"#{entry.anchor}" if entry.anchor else ""
+        label_html = self._link_html(
+            entry.anchor,
+            self._inline_html(
+                self._heading_fragments(entry.title, entry.number),
+                context.theme,
+                context.render_index,
+            ),
+            internal=True,
+        )
+        page_number = (
+            '<span class="docscriptor-toc-page-number" '
+            f'data-target="{escape(anchor_href)}"></span>'
+            if block.show_page_numbers
+            else ""
+        )
+        leader = (
+            f'<span class="docscriptor-toc-leader">{escape(block.leader)}</span>'
+            if block.show_page_numbers and block.leader
+            else ""
+        )
+        styles = [
+            f"margin-left: {toc_style.indent:.2f}in",
+            f"margin-top: {toc_style.space_before:.1f}pt",
+            f"margin-bottom: {toc_style.space_after:.1f}pt",
+            f"font-size: {context.theme.body_font_size + toc_style.font_size_delta:.1f}pt",
+            f"font-weight: {'700' if toc_style.bold else '400'}",
+            f"font-style: {'italic' if toc_style.italic else 'normal'}",
+        ]
+        return (
+            f'<div class="docscriptor-toc-entry docscriptor-toc-entry-level-{entry.level}" '
+            f'style="{"; ".join(styles)};">'
+            f'<span class="docscriptor-toc-label">{label_html}</span>'
+            + leader
+            + page_number
+            + "</div>"
         )
 
     def _render_children(
@@ -1083,6 +1117,25 @@ class HtmlRenderer:
             styles.append("font-style: italic")
         return "; ".join(styles)
 
+    def _toc_level_style(self, block: TableOfContents, level: int) -> TocLevelStyle:
+        defaults = TocLevelStyle(
+            indent=0.24 * max(level - 1, 0),
+            space_before=8 if level == 1 else (2 if level == 2 else 0),
+            space_after=6 if level == 1 else 3,
+            font_size_delta=0.6 if level == 1 else 0,
+            bold=True if level == 1 else (True if level == 2 else False),
+            italic=False,
+        )
+        override = block.style_for_level(level)
+        return TocLevelStyle(
+            indent=defaults.indent if override.indent is None else override.indent,
+            space_before=defaults.space_before if override.space_before is None else override.space_before,
+            space_after=defaults.space_after if override.space_after is None else override.space_after,
+            font_size_delta=defaults.font_size_delta if override.font_size_delta is None else override.font_size_delta,
+            bold=defaults.bold if override.bold is None else override.bold,
+            italic=defaults.italic if override.italic is None else override.italic,
+        )
+
     def _paragraph_style_css(
         self,
         style: ParagraphStyle,
@@ -1332,8 +1385,32 @@ body {{
   margin: 0 0 6pt;
 }}
 .docscriptor-toc {{
+  display: block;
+}}
+.docscriptor-toc-entry {{
   display: grid;
-  row-gap: 2pt;
+  grid-template-columns: auto 1fr max-content;
+  align-items: baseline;
+  column-gap: 0.28em;
+}}
+.docscriptor-toc-label {{
+  min-width: 0;
+}}
+.docscriptor-toc-leader {{
+  overflow: hidden;
+  white-space: nowrap;
+  color: #7f8b93;
+}}
+.docscriptor-toc-leader::before {{
+  content: "................................................................................................................................";
+  letter-spacing: 0.08em;
+}}
+.docscriptor-toc-page-number {{
+  min-width: 2ch;
+  text-align: right;
+}}
+.docscriptor-toc-page-number::after {{
+  content: target-counter(attr(data-target), page);
 }}
 .docscriptor-toc-entry-level-1 {{
   margin-top: 10pt;

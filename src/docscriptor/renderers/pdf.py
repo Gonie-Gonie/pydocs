@@ -25,6 +25,7 @@ from reportlab.platypus import (
     Table as RLTable,
     TableStyle,
 )
+from reportlab.platypus.tableofcontents import TableOfContents as RLTableOfContents
 
 from docscriptor.components.blocks import (
     Box,
@@ -43,6 +44,7 @@ from docscriptor.components.generated import (
     ReferencesPage,
     TableList,
     TableOfContents,
+    TocLevelStyle,
 )
 from docscriptor.components.inline import (
     _BlockReference,
@@ -144,6 +146,21 @@ class PageNumberTransition(Flowable):
         return None
 
 
+class FilteredTableOfContents(RLTableOfContents):
+    """ReportLab TOC flowable with optional heading-level filtering."""
+
+    def __init__(self, *, max_level: int | None = None, **kwargs: object) -> None:
+        super().__init__(**kwargs)
+        self.max_level = max_level
+
+    def notify(self, kind: str, stuff: object) -> None:
+        if kind == self._notifyKind and self.max_level is not None:
+            level = stuff[0]  # type: ignore[index]
+            if level + 1 > self.max_level:
+                return
+        super().notify(kind, stuff)
+
+
 class DocscriptorPdfTemplate(SimpleDocTemplate):
     """SimpleDocTemplate with page-number mode transitions."""
 
@@ -154,6 +171,11 @@ class DocscriptorPdfTemplate(SimpleDocTemplate):
     def afterFlowable(self, flowable: Flowable) -> None:
         if isinstance(flowable, PageNumberTransition) and flowable.mode == "main":
             self.main_matter_start_page = self.page + 1
+            return
+        toc_entry = getattr(flowable, "_docscriptor_toc_entry", None)
+        if toc_entry is not None:
+            level, text, key = toc_entry
+            self.notify("TOCEntry", (level, text, self.page, key))
 
 
 class PdfRenderer:
@@ -211,11 +233,13 @@ class PdfRenderer:
         if self._should_auto_render_footnotes_page(document, render_index):
             story.extend(self.render_footnotes_page(FootnotesPage(), context))
 
-        if document.theme.show_page_numbers or document.theme.page_background_color != "FFFFFF":
-            page_callback = self._page_callback(
-                document.theme,
-                has_front_matter=has_front_matter,
-            )
+        page_callback = self._page_callback(
+            document.theme,
+            has_front_matter=has_front_matter,
+        )
+        if self._story_has_indexing_flowable(story):
+            pdf.multiBuild(story, onFirstPage=page_callback, onLaterPages=page_callback)
+        elif document.theme.show_page_numbers or document.theme.page_background_color != "FFFFFF":
             pdf.build(story, onFirstPage=page_callback, onLaterPages=page_callback)
         else:
             pdf.build(story)
@@ -243,7 +267,7 @@ class PdfRenderer:
             alignment=ALIGNMENTS[theme.heading_alignment(block.level)],
             textColor=colors.black,
         )
-        return RLParagraph(
+        paragraph = RLParagraph(
             self._anchor_markup(render_index.heading_anchor(block))
             + self._inline_markup(
                 self._heading_fragments(
@@ -259,6 +283,16 @@ class PdfRenderer:
             ),
             title_style,
         )
+        paragraph._docscriptor_toc_entry = (
+            block.level - 1,
+            self._flatten_fragments(
+                self._heading_fragments(block.title, render_index.heading_number(block)),
+                theme,
+                render_index,
+            ),
+            render_index.heading_anchor(block),
+        )
+        return paragraph
 
     def render_paragraph(
         self,
@@ -456,10 +490,8 @@ class PdfRenderer:
         """Render the generated table of contents into PDF flowables."""
 
         return self._render_table_of_contents(
-            block.title,
-            context.theme,
-            context.styles,
-            context.render_index,
+            block,
+            context,
         )
 
     def _render_block(
@@ -598,6 +630,9 @@ class PdfRenderer:
             and bool(render_index.footnotes)
             and not any(isinstance(child, FootnotesPage) for child in document.body.children)
         )
+
+    def _story_has_indexing_flowable(self, story: list[object]) -> bool:
+        return any(getattr(flowable, "isIndexing", lambda: False)() for flowable in story)
 
     def _paragraph_style(self, style: ParagraphStyle, theme: Theme, base_style: RLParagraphStyle) -> RLParagraphStyle:
         return RLParagraphStyle(
@@ -1245,6 +1280,17 @@ class PdfRenderer:
             return fragment.plain_text()
         return fragment.value
 
+    def _flatten_fragments(
+        self,
+        fragments: list[Text],
+        theme: Theme,
+        render_index: RenderIndex,
+    ) -> str:
+        return "".join(
+            self._resolve_fragment_text(fragment, theme, render_index)
+            for fragment in fragments
+        )
+
     def _anchor_markup(self, anchor: str | None) -> str:
         if not anchor:
             return ""
@@ -1537,11 +1583,12 @@ class PdfRenderer:
 
     def _render_table_of_contents(
         self,
-        title: list[Text] | None,
-        theme: Theme,
-        styles: object,
-        render_index: RenderIndex,
+        block: TableOfContents,
+        context: PdfRenderContext,
     ) -> list[object]:
+        theme = context.theme
+        styles = context.styles
+        render_index = context.render_index
         level = theme.generated_section_level
         bold, italic = theme.heading_emphasis(level)
         title_style = RLParagraphStyle(
@@ -1558,7 +1605,7 @@ class PdfRenderer:
         story: list[object] = [
             RLParagraph(
                 self._inline_markup(
-                    title or [Text(theme.contents_title)],
+                    block.title or [Text(theme.contents_title)],
                     theme,
                     render_index,
                     base_font_name=title_style.fontName,
@@ -1569,40 +1616,84 @@ class PdfRenderer:
                 title_style,
             )
         ]
-        for entry in render_index.headings:
-            entry_style = RLParagraphStyle(
-                f"TableOfContentsEntry{entry.level}",
-                parent=styles["BodyText"],
-                fontName=self._resolve_font(
-                    theme.body_font_name,
-                    entry.level == 1,
-                    False,
-                ),
-                fontSize=theme.body_font_size + (0.6 if entry.level == 1 else 0),
-                leading=(theme.body_font_size + (0.6 if entry.level == 1 else 0)) * 1.32,
-                leftIndent=20 * max(entry.level - 1, 0),
-                spaceBefore=8 if entry.level == 1 else (2 if entry.level == 2 else 0),
-                spaceAfter=6 if entry.level == 1 else 3,
-                textColor=colors.black,
+        if block.show_page_numbers:
+            toc = FilteredTableOfContents(
+                max_level=block.max_level,
+                dotsMinLevel=0 if block.leader else -1,
             )
-            story.append(
-                RLParagraph(
-                    self._link_markup(
-                        entry.anchor,
-                        self._inline_markup(
-                            self._heading_fragments(entry.title, entry.number),
-                            theme,
-                            render_index,
-                            base_font_name=entry_style.fontName,
-                            base_size=entry_style.fontSize,
+            toc.levelStyles = [
+                self._pdf_toc_level_style(block, toc_level, theme, styles)
+                for toc_level in range(max((entry.level for entry in render_index.headings), default=1))
+            ]
+            story.append(toc)
+        else:
+            for entry in render_index.headings:
+                if not block.includes_level(entry.level):
+                    continue
+                entry_style = self._pdf_toc_level_style(block, entry.level - 1, theme, styles)
+                story.append(
+                    RLParagraph(
+                        self._link_markup(
+                            entry.anchor,
+                            self._inline_markup(
+                                self._heading_fragments(entry.title, entry.number),
+                                theme,
+                                render_index,
+                                base_font_name=entry_style.fontName,
+                                base_size=entry_style.fontSize,
+                            ),
+                            internal=True,
                         ),
-                        internal=True,
-                    ),
-                    entry_style,
+                        entry_style,
+                    )
                 )
-            )
         story.append(Spacer(1, 6))
         return story
+
+    def _pdf_toc_level_style(
+        self,
+        block: TableOfContents,
+        toc_level: int,
+        theme: Theme,
+        styles: object,
+    ) -> RLParagraphStyle:
+        level = toc_level + 1
+        toc_style = self._toc_level_style(block, level)
+        font_size = theme.body_font_size + toc_style.font_size_delta
+        return RLParagraphStyle(
+            f"TableOfContentsEntry{level}",
+            parent=styles["BodyText"],
+            fontName=self._resolve_font(
+                theme.body_font_name,
+                bool(toc_style.bold),
+                bool(toc_style.italic),
+            ),
+            fontSize=font_size,
+            leading=font_size * 1.32,
+            leftIndent=20 * toc_style.indent / 0.24 if toc_style.indent else 0,
+            spaceBefore=toc_style.space_before,
+            spaceAfter=toc_style.space_after,
+            textColor=colors.black,
+        )
+
+    def _toc_level_style(self, block: TableOfContents, level: int) -> TocLevelStyle:
+        defaults = TocLevelStyle(
+            indent=0.24 * max(level - 1, 0),
+            space_before=8 if level == 1 else (2 if level == 2 else 0),
+            space_after=6 if level == 1 else 3,
+            font_size_delta=0.6 if level == 1 else 0,
+            bold=True if level == 1 else (True if level == 2 else False),
+            italic=False,
+        )
+        override = block.style_for_level(level)
+        return TocLevelStyle(
+            indent=defaults.indent if override.indent is None else override.indent,
+            space_before=defaults.space_before if override.space_before is None else override.space_before,
+            space_after=defaults.space_after if override.space_after is None else override.space_after,
+            font_size_delta=defaults.font_size_delta if override.font_size_delta is None else override.font_size_delta,
+            bold=defaults.bold if override.bold is None else override.bold,
+            italic=defaults.italic if override.italic is None else override.italic,
+        )
 
     def _page_callback(self, theme: Theme, *, has_front_matter: bool):
         font_name = self._resolve_font(theme.body_font_name, False, False)
