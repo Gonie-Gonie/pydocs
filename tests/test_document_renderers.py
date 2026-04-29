@@ -39,6 +39,7 @@ from docscriptor import (
     FigureList,
     Footnote,
     HeadingNumbering,
+    ImageBox,
     ListStyle,
     Math,
     NumberedList,
@@ -448,6 +449,7 @@ def test_public_api_prefers_classes_for_structural_nodes() -> None:
     assert hasattr(docscriptor, "Box")
     assert hasattr(docscriptor, "BoxStyle")
     assert hasattr(docscriptor, "HeadingNumbering")
+    assert hasattr(docscriptor, "ImageBox")
     assert hasattr(docscriptor, "ListStyle")
     assert hasattr(docscriptor, "Table")
     assert hasattr(docscriptor, "TableCell")
@@ -507,6 +509,8 @@ def test_public_api_prefers_classes_for_structural_nodes() -> None:
 
 
 def test_sheet_renders_fixed_layout_text_and_shapes(tmp_path: Path) -> None:
+    image_path = tmp_path / "sheet-logo.png"
+    _write_sample_image(image_path)
     sheet = Sheet(
         Shape.rect(
             x=0.25,
@@ -523,6 +527,14 @@ def test_sheet_renders_fixed_layout_text_and_shapes(tmp_path: Path) -> None:
             height=0.45,
             stroke_color="#B2783D",
             fill_color="#FFF1D8",
+        ),
+        ImageBox(
+            image_path,
+            x=3.35,
+            y=3.22,
+            width=0.8,
+            height=0.28,
+            z_index=1,
         ),
         TextBox(
             "Docscriptor Contributor Certificate",
@@ -542,6 +554,7 @@ def test_sheet_renders_fixed_layout_text_and_shapes(tmp_path: Path) -> None:
             align="center",
             valign="middle",
             font_size=11,
+            z_index=2,
         ),
         width=7.5,
         height=5.0,
@@ -581,8 +594,12 @@ def test_sheet_renders_fixed_layout_text_and_shapes(tmp_path: Path) -> None:
     assert "After sheet." in word_text
     assert "Docscriptor Contributor Certificate" in pdf_text
     assert "Awarded for keeping document structure readable" in pdf_text
+    assert len(word_document.inline_shapes) == 1
+    assert _pdf_image_draw_count(pdf_path) == 1
     assert 'class="docscriptor-sheet"' in html_text
+    assert 'class="docscriptor-sheet-image"' in html_text
     assert "Docscriptor Contributor Certificate" in html_text
+    assert html_text.count("data:image/png;base64,") == 1
     assert "background: #FDFBF6" in html_text
 
 

@@ -50,10 +50,10 @@ from docscriptor.components.inline import (
 )
 from docscriptor.components.media import Figure, Table, build_table_layout
 from docscriptor.components.people import AuthorTitleLine
-from docscriptor.components.sheets import Sheet, TextBox
+from docscriptor.components.sheets import ImageBox, Sheet, TextBox
 from docscriptor.document import Document
 from docscriptor.components.equations import SUBSCRIPT, SUPERSCRIPT, parse_latex_segments
-from docscriptor.core import DocscriptorError, PathLike
+from docscriptor.core import DocscriptorError, PathLike, length_to_inches
 from docscriptor.layout.indexing import RenderIndex, build_render_index
 from docscriptor.layout.theme import ParagraphStyle, TextStyle, Theme
 from docscriptor.renderers.context import DocxRenderContext
@@ -1121,24 +1121,38 @@ class DocxRenderer:
             self._set_cell_borders(cell, sheet.border_color, sheet.border_width)
         self._set_cell_padding(cell, 8)
 
-        text_boxes = sorted(
-            (item for item in sheet.items if isinstance(item, TextBox)),
-            key=lambda item: (item.y, item.x),
+        visible_items = sorted(
+            (
+                (index, item)
+                for index, item in enumerate(sheet.items)
+                if isinstance(item, (ImageBox, TextBox))
+            ),
+            key=lambda indexed: (indexed[1].z_index, indexed[0]),
         )
-        for text_box in text_boxes:
-            paragraph = self._add_paragraph(cell)
-            paragraph.alignment = ALIGNMENTS[text_box.align]
-            paragraph.paragraph_format.space_after = Pt(2)
-            self._append_runs(
-                paragraph,
-                text_box.content,
-                default_size=text_box.font_size or theme.body_font_size,
-                theme=theme,
-                render_index=render_index,
-                word_document=word_document,
-            )
+        for _, item in visible_items:
+            if isinstance(item, ImageBox):
+                paragraph = self._add_paragraph(cell)
+                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                run = paragraph.add_run()
+                run.add_picture(
+                    self._image_box_picture_source(item),
+                    width=Inches(length_to_inches(item.width, sheet.unit or unit)),
+                    height=Inches(length_to_inches(item.height, sheet.unit or unit)),
+                )
+            else:
+                paragraph = self._add_paragraph(cell)
+                paragraph.alignment = ALIGNMENTS[item.align]
+                paragraph.paragraph_format.space_after = Pt(2)
+                self._append_runs(
+                    paragraph,
+                    item.content,
+                    default_size=item.font_size or theme.body_font_size,
+                    theme=theme,
+                    render_index=render_index,
+                    word_document=word_document,
+                )
 
-        if not text_boxes:
+        if not visible_items:
             cell.add_paragraph()
 
     def _render_table(
@@ -1439,6 +1453,20 @@ class DocxRenderer:
             buffer.seek(0)
             return buffer
         raise TypeError(f"Unsupported figure source for DOCX rendering: {type(source)!r}")
+
+    def _image_box_picture_source(self, image_box: ImageBox) -> str | BytesIO:
+        source = image_box.image_source
+        if isinstance(source, Path):
+            return str(source)
+        if hasattr(source, "savefig"):
+            buffer = BytesIO()
+            save_kwargs: dict[str, object] = {"format": image_box.format}
+            if image_box.dpi is not None:
+                save_kwargs["dpi"] = image_box.dpi
+            source.savefig(buffer, **save_kwargs)
+            buffer.seek(0)
+            return buffer
+        raise TypeError(f"Unsupported image source for DOCX sheet rendering: {type(source)!r}")
 
     def _render_footnotes_page(
         self,

@@ -13,6 +13,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.utils import ImageReader
 from reportlab.platypus import Image as RLImage
 from reportlab.platypus import (
     Flowable,
@@ -57,7 +58,7 @@ from docscriptor.components.inline import (
 )
 from docscriptor.components.media import Figure, Table, build_table_layout
 from docscriptor.components.people import AuthorTitleLine
-from docscriptor.components.sheets import Shape, Sheet, TextBox
+from docscriptor.components.sheets import ImageBox, Shape, Sheet, TextBox
 from docscriptor.document import Document
 from docscriptor.components.equations import SUBSCRIPT, SUPERSCRIPT, parse_latex_segments
 from docscriptor.core import DocscriptorError, PathLike, length_to_inches
@@ -191,12 +192,23 @@ class SheetFlowable(Flowable):
             canvas.setStrokeColor(colors.HexColor(f"#{sheet.border_color}"))
             canvas.setLineWidth(sheet.border_width)
             canvas.rect(0, 0, self.width, self.height, fill=0, stroke=1)
-        for item in sheet.items:
+        for item in self._items():
             if isinstance(item, TextBox):
                 self._draw_text_box(item)
+            elif isinstance(item, ImageBox):
+                self._draw_image_box(item)
             else:
                 self._draw_shape(item)
         canvas.restoreState()
+
+    def _items(self) -> list[TextBox | Shape | ImageBox]:
+        return [
+            item
+            for _, item in sorted(
+                enumerate(self.sheet.items),
+                key=lambda indexed: (indexed[1].z_index, indexed[0]),
+            )
+        ]
 
     def _length(self, value: float) -> float:
         return length_to_inches(value, self.sheet.unit or self.context.unit) * inch
@@ -254,6 +266,24 @@ class SheetFlowable(Flowable):
             canvas.ellipse(x, y, x + width, y + height, fill=fill, stroke=stroke)
         else:
             canvas.line(x, self.height - y_top, x + width, self.height - y_top - height)
+
+    def _draw_image_box(self, item: ImageBox) -> None:
+        x = self._length(item.x)
+        y_top = self._length(item.y)
+        width = self._length(item.width)
+        height = self._length(item.height)
+        y = self.height - y_top - height
+        preserve_aspect_ratio = item.fit == "contain"
+        self.canv.drawImage(
+            self.renderer._image_box_source(item),
+            x,
+            y,
+            width=width,
+            height=height,
+            preserveAspectRatio=preserve_aspect_ratio,
+            anchor="c",
+            mask="auto",
+        )
 
 
 class DocscriptorPdfTemplate(SimpleDocTemplate):
@@ -1169,6 +1199,20 @@ class PdfRenderer:
             buffer.seek(0)
             return buffer
         raise TypeError(f"Unsupported figure source for PDF rendering: {type(source)!r}")
+
+    def _image_box_source(self, image_box: ImageBox) -> str | ImageReader:
+        source = image_box.image_source
+        if isinstance(source, Path):
+            return str(source)
+        if hasattr(source, "savefig"):
+            buffer = BytesIO()
+            save_kwargs: dict[str, object] = {"format": image_box.format}
+            if image_box.dpi is not None:
+                save_kwargs["dpi"] = image_box.dpi
+            source.savefig(buffer, **save_kwargs)
+            buffer.seek(0)
+            return ImageReader(buffer)
+        raise TypeError(f"Unsupported image source for PDF sheet rendering: {type(source)!r}")
 
     def _inline_markup(
         self,

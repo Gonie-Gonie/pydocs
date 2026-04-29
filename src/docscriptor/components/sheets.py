@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal, TYPE_CHECKING
 
 from docscriptor.components.base import Block
 from docscriptor.components.inline import InlineInput, Text, coerce_inlines
-from docscriptor.core import normalize_color, normalize_length_unit
+from docscriptor.core import PathLike, normalize_color, normalize_length_unit
 
 if TYPE_CHECKING:
     from docscriptor.renderers.context import DocxRenderContext, HtmlRenderContext, PdfRenderContext
 
 
 SheetShapeKind = Literal["rect", "ellipse", "line"]
+SheetImageFit = Literal["contain", "stretch"]
+
+
 @dataclass(slots=True, init=False)
 class TextBox:
     """Positioned text on a fixed-layout sheet.
@@ -29,6 +33,7 @@ class TextBox:
     align: str
     valign: str
     font_size: float | None
+    z_index: int
 
     def __init__(
         self,
@@ -40,6 +45,7 @@ class TextBox:
         align: str = "left",
         valign: str = "top",
         font_size: float | None = None,
+        z_index: int = 0,
     ) -> None:
         if align not in {"left", "center", "right"}:
             raise ValueError(f"Unsupported TextBox alignment: {align!r}")
@@ -55,6 +61,7 @@ class TextBox:
         self.align = align
         self.valign = valign
         self.font_size = font_size
+        self.z_index = z_index
 
     def plain_text(self) -> str:
         """Return the textbox content without styling metadata."""
@@ -74,6 +81,7 @@ class Shape:
     stroke_color: str | None
     fill_color: str | None
     stroke_width: float
+    z_index: int
 
     def __init__(
         self,
@@ -86,6 +94,7 @@ class Shape:
         stroke_color: str | None = "000000",
         fill_color: str | None = None,
         stroke_width: float = 1.0,
+        z_index: int = 0,
     ) -> None:
         if kind not in {"rect", "ellipse", "line"}:
             raise ValueError(f"Unsupported shape kind: {kind!r}")
@@ -99,6 +108,7 @@ class Shape:
         self.stroke_color = normalize_color(stroke_color)
         self.fill_color = normalize_color(fill_color)
         self.stroke_width = stroke_width
+        self.z_index = z_index
 
     @classmethod
     def rect(cls, *, x: float, y: float, width: float, height: float, **kwargs: object) -> Shape:
@@ -114,6 +124,52 @@ class Shape:
 
 
 @dataclass(slots=True, init=False)
+class ImageBox:
+    """A positioned image on a fixed-layout sheet."""
+
+    image_source: object
+    x: float
+    y: float
+    width: float
+    height: float
+    fit: SheetImageFit
+    format: str
+    dpi: int | None
+    z_index: int
+
+    def __init__(
+        self,
+        image_source: PathLike | object,
+        *,
+        x: float,
+        y: float,
+        width: float,
+        height: float,
+        fit: SheetImageFit = "contain",
+        format: str = "png",
+        dpi: int | None = 150,
+        z_index: int = 0,
+    ) -> None:
+        if width < 0 or height < 0:
+            raise ValueError("ImageBox width and height must be >= 0")
+        if fit not in {"contain", "stretch"}:
+            raise ValueError(f"Unsupported ImageBox fit: {fit!r}")
+        self.image_source = (
+            Path(image_source)
+            if isinstance(image_source, (str, Path))
+            else image_source
+        )
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.fit = fit
+        self.format = format
+        self.dpi = dpi
+        self.z_index = z_index
+
+
+@dataclass(slots=True, init=False)
 class Sheet(Block):
     """A fixed-layout block for one-page forms such as certificates.
 
@@ -121,7 +177,7 @@ class Sheet(Block):
     short, visually precise pages rather than long flowing prose.
     """
 
-    items: list[TextBox | Shape]
+    items: list[TextBox | Shape | ImageBox]
     width: float | None
     height: float | None
     unit: str | None
@@ -132,7 +188,7 @@ class Sheet(Block):
 
     def __init__(
         self,
-        *items: TextBox | Shape,
+        *items: TextBox | Shape | ImageBox,
         width: float | None = None,
         height: float | None = None,
         unit: str | None = None,
@@ -179,4 +235,4 @@ class Sheet(Block):
         return renderer.render_sheet(self, context)
 
 
-__all__ = ["Shape", "Sheet", "TextBox"]
+__all__ = ["ImageBox", "Shape", "Sheet", "TextBox"]

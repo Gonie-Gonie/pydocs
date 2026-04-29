@@ -114,7 +114,7 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert "Docscriptor Contributor Certificate" in table_text
     assert "Footnotes" not in [text for text in paragraph_texts if text == "Footnotes"]
     assert len(word_document.tables) == 11
-    assert len(word_document.inline_shapes) == 4
+    assert len(word_document.inline_shapes) == 5
     assert len(word_document.comments) == 2
     assert next(paragraph.style.name for paragraph in word_document.paragraphs if paragraph.text == "Comments") == "Heading 2"
     assert next(paragraph.style.name for paragraph in word_document.paragraphs if paragraph.text == "References") == "Heading 2"
@@ -151,7 +151,7 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert "github.com/Gonie-Gonie/docscriptor" in pdf_text
     assert "Footnotes" in pdf_text
     assert len(pdf_reader.pages) >= 14
-    assert _pdf_image_draw_count(pdf_path) == 4
+    assert _pdf_image_draw_count(pdf_path) == 5
 
     assert "Docscriptor User Guide" in normalized_html_text
     assert "Guide Cover" in normalized_html_text
@@ -176,7 +176,7 @@ def test_usage_guide_example_builds_outputs(tmp_path: Path) -> None:
     assert "Portable footnotes are authored inline" in normalized_html_text
     assert "github.com/Gonie-Gonie/docscriptor" in normalized_html_text
     assert "Footnotes" in normalized_html_text
-    assert html_text.count("data:image/png;base64,") == 4
+    assert html_text.count("data:image/png;base64,") == 5
     assert 'href="#table_1"' in html_text
     assert 'href="#figure_1"' in html_text
     assert 'class="docscriptor-toc-entry docscriptor-toc-entry-level-1"' in html_text

@@ -25,6 +25,7 @@ _EXPORTS = {
     "Footnote": "docscriptor.components.inline",
     "FootnotesPage": "docscriptor.components.generated",
     "Hyperlink": "docscriptor.components.inline",
+    "ImageBox": "docscriptor.components.sheets",
     "Italic": "docscriptor.components.inline",
     "Math": "docscriptor.components.inline",
     "Monospace": "docscriptor.components.inline",

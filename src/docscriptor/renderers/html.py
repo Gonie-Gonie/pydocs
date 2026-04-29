@@ -38,7 +38,7 @@ from docscriptor.components.inline import (
 )
 from docscriptor.components.media import Figure, Table, TablePlacement, build_table_layout
 from docscriptor.components.people import AuthorTitleLine
-from docscriptor.components.sheets import Shape, Sheet, TextBox
+from docscriptor.components.sheets import ImageBox, Shape, Sheet, TextBox
 from docscriptor.core import DocscriptorError, PathLike, length_to_inches
 from docscriptor.document import Document
 from docscriptor.components.equations import SUBSCRIPT, SUPERSCRIPT, parse_latex_segments
@@ -256,7 +256,10 @@ class HtmlRenderer:
             if block.border_color is not None and block.border_width > 0
             else "border: 0;"
         )
-        items = "".join(self._sheet_item_html(item, block, context) for item in block.items)
+        items = "".join(
+            self._sheet_item_html(item, block, context)
+            for item in self._sheet_items(block)
+        )
         page_break = " break-after: page; page-break-after: always;" if block.page_break_after else ""
         return (
             '<section class="docscriptor-sheet" '
@@ -890,13 +893,24 @@ class HtmlRenderer:
 
     def _sheet_item_html(
         self,
-        item: TextBox | Shape,
+        item: TextBox | Shape | ImageBox,
         sheet: Sheet,
         context: HtmlRenderContext,
     ) -> str:
         if isinstance(item, TextBox):
             return self._sheet_text_box_html(item, sheet, context)
+        if isinstance(item, ImageBox):
+            return self._sheet_image_box_html(item, sheet, context)
         return self._sheet_shape_html(item, sheet, context)
+
+    def _sheet_items(self, sheet: Sheet) -> list[TextBox | Shape | ImageBox]:
+        return [
+            item
+            for _, item in sorted(
+                enumerate(sheet.items),
+                key=lambda indexed: (indexed[1].z_index, indexed[0]),
+            )
+        ]
 
     def _sheet_text_box_html(
         self,
@@ -950,6 +964,41 @@ class HtmlRenderer:
             f'style="position: absolute; left: {x:.4f}in; top: {y:.4f}in; width: {width:.4f}in; height: {height:.4f}in; '
             f'border: {item.stroke_width:.2f}pt solid {stroke}; background: {fill}; border-radius: {border_radius}; box-sizing: border-box;"></div>'
         )
+
+    def _sheet_image_box_html(
+        self,
+        item: ImageBox,
+        sheet: Sheet,
+        context: HtmlRenderContext,
+    ) -> str:
+        x = self._sheet_length(item.x, sheet, context)
+        y = self._sheet_length(item.y, sheet, context)
+        width = self._sheet_length(item.width, sheet, context)
+        height = self._sheet_length(item.height, sheet, context)
+        object_fit = "fill" if item.fit == "stretch" else "contain"
+        return (
+            '<img class="docscriptor-sheet-image" '
+            f'src="{self._image_box_src(item)}" alt="" '
+            f'style="position: absolute; left: {x:.4f}in; top: {y:.4f}in; width: {width:.4f}in; height: {height:.4f}in; '
+            f'object-fit: {object_fit}; object-position: center; box-sizing: border-box;" />'
+        )
+
+    def _image_box_src(self, image_box: ImageBox) -> str:
+        source = image_box.image_source
+        if isinstance(source, Path):
+            image_bytes = source.read_bytes()
+            mime_type = guess_type(source.name)[0] or self._mime_type_for_format(source.suffix.lstrip(".") or image_box.format)
+        elif hasattr(source, "savefig"):
+            buffer = BytesIO()
+            save_kwargs: dict[str, object] = {"format": image_box.format}
+            if image_box.dpi is not None:
+                save_kwargs["dpi"] = image_box.dpi
+            source.savefig(buffer, **save_kwargs)
+            image_bytes = buffer.getvalue()
+            mime_type = self._mime_type_for_format(image_box.format)
+        else:
+            raise TypeError(f"Unsupported image source for HTML sheet rendering: {type(source)!r}")
+        return f"data:{mime_type};base64,{b64encode(image_bytes).decode('ascii')}"
 
     def _fragment_html(
         self,

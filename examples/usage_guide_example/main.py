@@ -35,6 +35,7 @@ from docscriptor import (
     Figure,
     FigureList,
     Footnote,
+    ImageBox,
     NumberedList,
     PageMargins,
     PageSize,
@@ -150,10 +151,11 @@ figure = Figure(
 )
 """
 
-SHEET_SNIPPET = """from docscriptor import Shape, Sheet, TextBox
+SHEET_SNIPPET = """from docscriptor import ImageBox, Shape, Sheet, TextBox
 
 certificate = Sheet(
     Shape.rect(x=0.4, y=0.4, width=20.2, height=13.2, stroke_color="#D4B56A", stroke_width=1.4),
+    ImageBox("assets/docscriptor-logo.png", x=8.7, y=4.0, width=3.6, height=1.6),
     TextBox("Docscriptor Contributor Certificate", x=1.2, y=2.4, width=18.6, height=1.2, align="center", font_size=20),
     TextBox("Awarded for keeping document structure readable across DOCX, PDF, and HTML.", x=2.0, y=6.2, width=17.0, height=1.0, align="center", valign="middle"),
     width=21.0,
@@ -583,6 +585,14 @@ def build_usage_guide_document() -> Document:
             stroke_color="#B2783D",
             fill_color="#FFF1D8",
         ),
+        ImageBox(
+            LOGO_PATH,
+            x=8.7,
+            y=4.0,
+            width=3.6,
+            height=1.6,
+            z_index=1,
+        ),
         TextBox(
             "Docscriptor Contributor Certificate",
             x=1.2,
@@ -591,6 +601,7 @@ def build_usage_guide_document() -> Document:
             height=1.2,
             align="center",
             font_size=20,
+            z_index=2,
         ),
         TextBox(
             "Awarded for keeping document structure readable across DOCX, PDF, and HTML.",
@@ -601,6 +612,7 @@ def build_usage_guide_document() -> Document:
             align="center",
             valign="middle",
             font_size=11,
+            z_index=2,
         ),
         TextBox(
             "Generated from the same Python document tree as this guide.",
@@ -610,6 +622,7 @@ def build_usage_guide_document() -> Document:
             height=0.8,
             align="center",
             font_size=10,
+            z_index=2,
         ),
         TextBox(
             "docscriptor",
@@ -619,6 +632,7 @@ def build_usage_guide_document() -> Document:
             height=0.6,
             align="center",
             font_size=12,
+            z_index=2,
         ),
         width=21.0,
         height=14.0,

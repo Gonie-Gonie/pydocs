@@ -26,7 +26,7 @@ This file is the shared memory for ongoing work on this repository. Keep it read
 - Backward compatibility does not need to be preserved unless the user gives a specific compatibility guide or constraint.
 - This project is still in an API-shaping stage. Prefer clear, explicit, maintainable APIs over carrying old names by default.
 - Prefer document-level defaults through `DocumentSettings` when a setting should apply consistently across renderers.
-- Use `Sheet` for short fixed-layout form pages such as certificates and cover inserts. It should remain a normal block inside `Document`, not a competing document root or a requirement for ordinary flowing documents.
+- Use `Sheet` for short fixed-layout form pages such as certificates and cover inserts. It should remain a normal block inside `Document`, not a competing document root or a requirement for ordinary flowing documents. Keep fixed-sheet growth incremental: positioned text, images, simple shapes, and explicit layer ordering before heavier slide-like behavior.
 - Release versioning rule: bump the minor version when backward compatibility is not guaranteed; bump only the patch version when backward compatibility is preserved.
 
 ## Local Environment Notes
