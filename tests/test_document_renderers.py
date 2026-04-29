@@ -587,7 +587,8 @@ def test_sheet_renders_fixed_layout_text_and_shapes(tmp_path: Path) -> None:
         for row in table.rows
         for cell in row.cells
     )
-    pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(pdf_path.read_bytes())).pages)
+    pdf_reader = PdfReader(BytesIO(pdf_path.read_bytes()))
+    pdf_text = "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
     html_text = html_path.read_text(encoding="utf-8")
 
     assert "Docscriptor Contributor Certificate" in table_text
@@ -596,7 +597,10 @@ def test_sheet_renders_fixed_layout_text_and_shapes(tmp_path: Path) -> None:
     assert len(word_document.sections) >= 3
     assert "Docscriptor Contributor Certificate" in pdf_text
     assert "Awarded for keeping document structure readable" in pdf_text
-    assert len(PdfReader(BytesIO(pdf_path.read_bytes())).pages) >= 3
+    assert len(pdf_reader.pages) >= 3
+    sheet_page = next(page for page in pdf_reader.pages if "Docscriptor Contributor Certificate" in (page.extract_text() or ""))
+    assert round(float(sheet_page.mediabox.width) / 72, 1) == 7.5
+    assert round(float(sheet_page.mediabox.height) / 72, 1) == 5.0
     assert len(word_document.inline_shapes) == 1
     assert _pdf_image_draw_count(pdf_path) == 1
     assert 'class="docscriptor-sheet"' in html_text
@@ -639,18 +643,24 @@ def test_nested_sheet_owns_docx_section_and_html_page_wrapper(tmp_path: Path) ->
     )
 
     docx_path = tmp_path / "nested-sheet.docx"
+    pdf_path = tmp_path / "nested-sheet.pdf"
     html_path = tmp_path / "nested-sheet.html"
 
     document.save_docx(docx_path)
+    document.save_pdf(pdf_path)
     document.save_html(html_path)
 
     word_document = WordDocument(docx_path)
+    pdf_reader = PdfReader(BytesIO(pdf_path.read_bytes()))
     html_text = html_path.read_text(encoding="utf-8")
 
     assert len(word_document.sections) >= 3
     assert round(word_document.sections[1].page_width.inches, 1) == 8.5
     assert round(word_document.sections[1].page_height.inches, 1) == 5.5
     assert word_document.sections[1].left_margin.inches == 0
+    sheet_page = next(page for page in pdf_reader.pages if "Nested Sheet Page" in (page.extract_text() or ""))
+    assert round(float(sheet_page.mediabox.width) / 72, 1) == 8.5
+    assert round(float(sheet_page.mediabox.height) / 72, 1) == 5.5
     assert 'class="docscriptor-sheet-page"' in html_text
     assert "width: 8.5000in" in html_text
     assert "Before sheet." in html_text

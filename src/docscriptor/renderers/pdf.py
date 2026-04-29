@@ -17,8 +17,11 @@ from reportlab.lib.utils import ImageReader
 from reportlab.platypus import Image as RLImage
 from reportlab.platypus import (
     Flowable,
+    Frame,
     KeepTogether,
+    NextPageTemplate,
     PageBreak as RLPageBreak,
+    PageTemplate,
     Paragraph as RLParagraph,
     Preformatted,
     SimpleDocTemplate,
@@ -26,6 +29,7 @@ from reportlab.platypus import (
     Table as RLTable,
     TableStyle,
 )
+from reportlab.platypus.doctemplate import _doNothing
 from reportlab.platypus.tableofcontents import TableOfContents as RLTableOfContents
 
 from docscriptor.components.blocks import (
@@ -178,22 +182,14 @@ class SheetFlowable(Flowable):
         self.context = context
         self.width = renderer._sheet_width(sheet, context) * inch
         self.height = renderer._sheet_height(sheet, context) * inch
-        self.draw_width = self.width
-        self.draw_height = self.height
-        self.scale = 1.0
 
     def wrap(self, available_width: float, available_height: float) -> tuple[float, float]:
-        scale = min(available_width / self.width, available_height / self.height, 1.0)
-        self.scale = scale
-        self.draw_width = self.width * scale
-        self.draw_height = self.height * scale
-        return (self.draw_width, self.draw_height)
+        return (self.width, self.height)
 
     def draw(self) -> None:
         canvas = self.canv
         sheet = self.sheet
         canvas.saveState()
-        canvas.scale(self.scale, self.scale)
         self._draw_background()
         if sheet.border_color is not None and sheet.border_width > 0:
             canvas.setStrokeColor(colors.HexColor(f"#{sheet.border_color}"))
@@ -325,6 +321,66 @@ class DocscriptorPdfTemplate(SimpleDocTemplate):
     def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
         self.main_matter_start_page: int | None = None
+        self._sheet_page_templates: list[PageTemplate] = []
+
+    def register_sheet_page_template(
+        self,
+        template_id: str,
+        *,
+        width: float,
+        height: float,
+    ) -> None:
+        frame = Frame(
+            0,
+            0,
+            width,
+            height,
+            leftPadding=0,
+            bottomPadding=0,
+            rightPadding=0,
+            topPadding=0,
+            id=f"{template_id}_frame",
+        )
+        self._sheet_page_templates.append(
+            PageTemplate(
+                id=template_id,
+                frames=[frame],
+                pagesize=(width, height),
+            )
+        )
+
+    def build(
+        self,
+        flowables: list[object],
+        onFirstPage: object = _doNothing,
+        onLaterPages: object = _doNothing,
+        canvasmaker: object = None,
+    ) -> None:
+        self._calc()
+        frame = Frame(
+            self.leftMargin,
+            self.bottomMargin,
+            self.width,
+            self.height,
+            id="normal",
+        )
+        self.addPageTemplates(
+            [
+                PageTemplate(id="First", frames=frame, onPage=onFirstPage, pagesize=self.pagesize),
+                PageTemplate(id="Later", frames=frame, onPage=onLaterPages, pagesize=self.pagesize),
+                *self._sheet_page_templates,
+            ]
+        )
+        if onFirstPage is _doNothing and hasattr(self, "onFirstPage"):
+            self.pageTemplates[0].beforeDrawPage = self.onFirstPage
+        if onLaterPages is _doNothing and hasattr(self, "onLaterPages"):
+            self.pageTemplates[1].beforeDrawPage = self.onLaterPages
+        from reportlab.platypus.doctemplate import BaseDocTemplate
+
+        if canvasmaker is None:
+            BaseDocTemplate.build(self, flowables)
+        else:
+            BaseDocTemplate.build(self, flowables, canvasmaker=canvasmaker)
 
     def afterFlowable(self, flowable: Flowable) -> None:
         if isinstance(flowable, PageNumberTransition) and flowable.mode == "main":
@@ -347,6 +403,8 @@ class PdfRenderer:
 
         path = Path(output_path)
         path.parent.mkdir(parents=True, exist_ok=True)
+        self._sheet_template_ids: dict[int, str] = {}
+        self._sheet_template_specs: dict[str, tuple[float, float]] = {}
 
         pdf = DocscriptorPdfTemplate(
             str(path),
@@ -390,6 +448,9 @@ class PdfRenderer:
 
         if self._should_auto_render_footnotes_page(document, render_index):
             story.extend(self.render_footnotes_page(FootnotesPage(), context))
+
+        for template_id, (width, height) in self._sheet_template_specs.items():
+            pdf.register_sheet_page_template(template_id, width=width, height=height)
 
         page_callback = self._page_callback(
             document.theme,
@@ -543,9 +604,11 @@ class PdfRenderer:
 
         story: list[object] = []
         if block.page_break_before:
+            story.append(NextPageTemplate(self._sheet_template_id(block, context)))
             story.append(RLPageBreak())
         story.append(SheetFlowable(block, self, context))
         if block.page_break_after:
+            story.append(NextPageTemplate("Later"))
             story.append(RLPageBreak())
         return story
 
@@ -816,6 +879,19 @@ class PdfRenderer:
         if sheet.height is None:
             return context.settings.page_height_in_inches()
         return length_to_inches(sheet.height, sheet.unit or context.unit)
+
+    def _sheet_template_id(self, sheet: Sheet, context: PdfRenderContext) -> str:
+        key = id(sheet)
+        template_id = self._sheet_template_ids.get(key)
+        if template_id is not None:
+            return template_id
+        template_id = f"docscriptor_sheet_{len(self._sheet_template_ids) + 1}"
+        self._sheet_template_ids[key] = template_id
+        self._sheet_template_specs[template_id] = (
+            self._sheet_width(sheet, context) * inch,
+            self._sheet_height(sheet, context) * inch,
+        )
+        return template_id
 
     def _paragraph_style(self, style: ParagraphStyle, theme: Theme, base_style: RLParagraphStyle) -> RLParagraphStyle:
         return RLParagraphStyle(
