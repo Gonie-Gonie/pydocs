@@ -600,10 +600,61 @@ def test_sheet_renders_fixed_layout_text_and_shapes(tmp_path: Path) -> None:
     assert len(word_document.inline_shapes) == 1
     assert _pdf_image_draw_count(pdf_path) == 1
     assert 'class="docscriptor-sheet"' in html_text
+    assert 'class="docscriptor-sheet-page"' in html_text
+    assert "transform: translateX(-50%)" in html_text
     assert 'class="docscriptor-sheet-image"' in html_text
     assert "Docscriptor Contributor Certificate" in html_text
     assert html_text.count("data:image/png;base64,") == 1
     assert "linear-gradient(to bottom, #FDFBF6, #EEF6FF)" in html_text
+
+
+def test_nested_sheet_owns_docx_section_and_html_page_wrapper(tmp_path: Path) -> None:
+    sheet = Sheet(
+        TextBox(
+            "Nested Sheet Page",
+            x=1.0,
+            y=1.0,
+            width=5.0,
+            height=0.5,
+            align="center",
+        ),
+        width=8.5,
+        height=5.5,
+        unit="in",
+        border_color="#476172",
+        border_width=1.0,
+    )
+    document = Document(
+        "Nested Sheet Test",
+        Chapter(
+            "Flow",
+            Section(
+                "Before and after",
+                Paragraph("Before sheet."),
+                sheet,
+                Paragraph("After sheet."),
+            ),
+        ),
+        settings=DocumentSettings(page_size=PageSize.letter()),
+    )
+
+    docx_path = tmp_path / "nested-sheet.docx"
+    html_path = tmp_path / "nested-sheet.html"
+
+    document.save_docx(docx_path)
+    document.save_html(html_path)
+
+    word_document = WordDocument(docx_path)
+    html_text = html_path.read_text(encoding="utf-8")
+
+    assert len(word_document.sections) >= 3
+    assert round(word_document.sections[1].page_width.inches, 1) == 8.5
+    assert round(word_document.sections[1].page_height.inches, 1) == 5.5
+    assert word_document.sections[1].left_margin.inches == 0
+    assert 'class="docscriptor-sheet-page"' in html_text
+    assert "width: 8.5000in" in html_text
+    assert "Before sheet." in html_text
+    assert "After sheet." in html_text
 
 
 def test_explicit_page_break_renders_to_all_outputs(tmp_path: Path) -> None:

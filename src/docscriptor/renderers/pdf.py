@@ -178,14 +178,22 @@ class SheetFlowable(Flowable):
         self.context = context
         self.width = renderer._sheet_width(sheet, context) * inch
         self.height = renderer._sheet_height(sheet, context) * inch
+        self.draw_width = self.width
+        self.draw_height = self.height
+        self.scale = 1.0
 
     def wrap(self, available_width: float, available_height: float) -> tuple[float, float]:
-        return (self.width, self.height)
+        scale = min(available_width / self.width, available_height / self.height, 1.0)
+        self.scale = scale
+        self.draw_width = self.width * scale
+        self.draw_height = self.height * scale
+        return (self.draw_width, self.draw_height)
 
     def draw(self) -> None:
         canvas = self.canv
         sheet = self.sheet
         canvas.saveState()
+        canvas.scale(self.scale, self.scale)
         self._draw_background()
         if sheet.border_color is not None and sheet.border_width > 0:
             canvas.setStrokeColor(colors.HexColor(f"#{sheet.border_color}"))

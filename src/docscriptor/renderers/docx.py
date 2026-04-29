@@ -283,6 +283,15 @@ class DocxRenderer:
     ) -> None:
         """Render a fixed-layout sheet into the current DOCX container."""
 
+        restore_section = False
+        if not self._is_cell_container(container):
+            if sheet.page_break_before and (context.word_document.paragraphs or context.word_document.tables):
+                section = context.word_document.add_section(WD_SECTION.NEW_PAGE)
+            else:
+                section = context.word_document.sections[-1]
+            self._configure_sheet_section_page_box(section, sheet, context)
+            restore_section = sheet.page_break_after
+
         self._render_sheet(
             container,
             sheet,
@@ -292,8 +301,9 @@ class DocxRenderer:
             context.unit,
             word_document=context.word_document,
         )
-        if sheet.page_break_after:
-            self._ensure_page_break(context.word_document)
+        if restore_section:
+            section = context.word_document.add_section(WD_SECTION.NEW_PAGE)
+            self._configure_section_page_box(section, context.settings)
 
     def render_comments_page(
         self,
@@ -499,15 +509,7 @@ class DocxRenderer:
     ) -> None:
         for index, child in enumerate(children):
             if isinstance(child, Sheet):
-                if child.page_break_before and (word_document.paragraphs or word_document.tables):
-                    section = word_document.add_section(WD_SECTION.NEW_PAGE)
-                    self._configure_sheet_section_page_box(section, child, context)
-                else:
-                    self._configure_sheet_section_page_box(word_document.sections[-1], child, context)
                 child.render_to_docx(self, word_document, context)
-                if child.page_break_after and index < len(children) - 1:
-                    section = word_document.add_section(WD_SECTION.NEW_PAGE)
-                    self._configure_section_page_box(section, context.settings)
                 continue
             if self._is_paginated_generated_page(child) and context.theme.generated_page_breaks:
                 if word_document.paragraphs and not self._ends_with_page_break(word_document):

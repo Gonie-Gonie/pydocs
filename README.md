@@ -101,7 +101,7 @@ The default behavior is intentionally conventional:
 - captioned tables and figures with automatic numbering and in-text references
 - table support for `TableCell(...)`, `rowspan`, `colspan`, banded rows, and dataframe-like inputs
 - figure support for both stored image files and `savefig()`-compatible Python objects
-- fixed-layout `Sheet(...)` pages with positioned `TextBox(...)`, `ImageBox(...)`, basic `Shape(...)` objects, layer ordering, and gradient-capable backgrounds for short forms such as certificates
+- fixed-layout `Sheet(...)` pages with positioned `TextBox(...)`, `ImageBox(...)`, basic `Shape(...)` objects, layer ordering, gradient-capable backgrounds, and standalone-page behavior for short forms such as certificates
 - bibliography support through `CitationSource`, `CitationLibrary`, direct citation objects, and BibTeX import
 - optional title matter such as subtitle, structured `Author(...)` metadata, `AuthorLayout(...)`, affiliations, and a cover page
 - inline hyperlinks and heading/caption anchors for cross-references

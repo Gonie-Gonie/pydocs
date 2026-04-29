@@ -268,11 +268,14 @@ class HtmlRenderer:
             page_break_parts.append("break-after: page; page-break-after: always;")
         page_break = " " + " ".join(page_break_parts) if page_break_parts else ""
         return (
+            '<div class="docscriptor-sheet-page" '
+            f'style="position: relative; left: 50%; transform: translateX(-50%); width: {width:.4f}in; max-width: calc(100vw - 32px); '
+            f'overflow-x: auto; padding: 0; background: transparent;{page_break}">'
             '<section class="docscriptor-sheet" '
-            f'style="position: relative; width: {width:.4f}in; height: {height:.4f}in; '
-            f'{background} {border} overflow: hidden; box-sizing: border-box;{page_break}">'
+            f'style="position: relative; width: {width:.4f}in; height: {height:.4f}in; max-width: none; '
+            f'{background} {border} overflow: hidden; box-sizing: border-box;">'
             + items
-            + "</section>"
+            + "</section></div>"
         )
 
     def render_section(self, block: Section, context: HtmlRenderContext) -> str:
@@ -1534,6 +1537,14 @@ body {{
   display: inline-block;
   max-width: 100%;
   height: auto;
+}}
+.docscriptor-sheet-page {{
+  margin-top: 18pt;
+  margin-bottom: 18pt;
+  box-shadow: 0 18px 40px rgba(24, 34, 43, 0.16);
+}}
+.docscriptor-sheet {{
+  display: block;
 }}
 .docscriptor-generated-title {{
   margin-top: 0;
