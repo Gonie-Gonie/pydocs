@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 SheetShapeKind = Literal["rect", "ellipse", "line"]
 SheetImageFit = Literal["contain", "stretch"]
+SheetGradientDirection = Literal["vertical", "horizontal"]
 
 
 @dataclass(slots=True, init=False)
@@ -182,8 +183,11 @@ class Sheet(Block):
     height: float | None
     unit: str | None
     background_color: str
+    background_gradient: tuple[str, str] | None
+    gradient_direction: SheetGradientDirection
     border_color: str | None
     border_width: float
+    page_break_before: bool
     page_break_after: bool
 
     def __init__(
@@ -193,9 +197,12 @@ class Sheet(Block):
         height: float | None = None,
         unit: str | None = None,
         background_color: str = "FFFFFF",
+        background_gradient: tuple[str, str] | None = None,
+        gradient_direction: SheetGradientDirection = "vertical",
         border_color: str | None = None,
         border_width: float = 0.0,
-        page_break_after: bool = False,
+        page_break_before: bool = True,
+        page_break_after: bool = True,
     ) -> None:
         if width is not None and width <= 0:
             raise ValueError("Sheet width must be > 0")
@@ -203,13 +210,25 @@ class Sheet(Block):
             raise ValueError("Sheet height must be > 0")
         if border_width < 0:
             raise ValueError("Sheet border_width must be >= 0")
+        if gradient_direction not in {"vertical", "horizontal"}:
+            raise ValueError(f"Unsupported Sheet gradient direction: {gradient_direction!r}")
         self.items = list(items)
         self.width = width
         self.height = height
         self.unit = normalize_length_unit(unit) if unit is not None else None
         self.background_color = normalize_color(background_color) or "FFFFFF"
+        self.background_gradient = (
+            (
+                normalize_color(background_gradient[0]) or "FFFFFF",
+                normalize_color(background_gradient[1]) or "FFFFFF",
+            )
+            if background_gradient is not None
+            else None
+        )
+        self.gradient_direction = gradient_direction
         self.border_color = normalize_color(border_color)
         self.border_width = border_width
+        self.page_break_before = page_break_before
         self.page_break_after = page_break_after
 
     def render_to_docx(

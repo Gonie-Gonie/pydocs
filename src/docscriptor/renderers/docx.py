@@ -6,7 +6,7 @@ from io import BytesIO
 from pathlib import Path
 
 from docx import Document as WordDocument
-from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.enum.table import WD_ROW_HEIGHT_RULE, WD_TABLE_ALIGNMENT
 from docx.enum.section import WD_SECTION
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT, WD_TAB_LEADER
 from docx.enum.text import WD_BREAK
@@ -476,6 +476,21 @@ class DocxRenderer:
         section.bottom_margin = Inches(bottom)
         section.left_margin = Inches(left)
 
+    def _configure_sheet_section_page_box(
+        self,
+        section: object,
+        sheet: Sheet,
+        context: DocxRenderContext,
+    ) -> None:
+        width = self._sheet_width(sheet, context.settings, context.unit)
+        height = self._sheet_height(sheet, context.settings, context.unit)
+        section.page_width = Inches(width)
+        section.page_height = Inches(height)
+        section.top_margin = Inches(0)
+        section.right_margin = Inches(0)
+        section.bottom_margin = Inches(0)
+        section.left_margin = Inches(0)
+
     def _render_top_level_children(
         self,
         word_document: WordDocument,
@@ -483,6 +498,17 @@ class DocxRenderer:
         context: DocxRenderContext,
     ) -> None:
         for index, child in enumerate(children):
+            if isinstance(child, Sheet):
+                if child.page_break_before and (word_document.paragraphs or word_document.tables):
+                    section = word_document.add_section(WD_SECTION.NEW_PAGE)
+                    self._configure_sheet_section_page_box(section, child, context)
+                else:
+                    self._configure_sheet_section_page_box(word_document.sections[-1], child, context)
+                child.render_to_docx(self, word_document, context)
+                if child.page_break_after and index < len(children) - 1:
+                    section = word_document.add_section(WD_SECTION.NEW_PAGE)
+                    self._configure_section_page_box(section, context.settings)
+                continue
             if self._is_paginated_generated_page(child) and context.theme.generated_page_breaks:
                 if word_document.paragraphs and not self._ends_with_page_break(word_document):
                     self._ensure_page_break(word_document)
@@ -1111,15 +1137,22 @@ class DocxRenderer:
         *,
         word_document: WordDocument,
     ) -> None:
+        width = self._sheet_width(sheet, settings, unit)
+        height = self._sheet_height(sheet, settings, unit)
         outer_table = container.add_table(rows=1, cols=1)
         outer_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+        outer_table.autofit = False
+        outer_table.columns[0].width = Inches(width)
+        outer_table.rows[0].height = Inches(height)
+        outer_table.rows[0].height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
         cell = outer_table.rows[0].cells[0]
         cell._tc.clear_content()
         self._initialized_cells.discard(id(cell))
-        self._set_cell_shading(cell, sheet.background_color)
+        self._set_cell_width(cell, width)
+        self._set_cell_shading(cell, self._sheet_docx_background(sheet))
         if sheet.border_color is not None and sheet.border_width > 0:
             self._set_cell_borders(cell, sheet.border_color, sheet.border_width)
-        self._set_cell_padding(cell, 8)
+        self._set_cell_padding(cell, 0)
 
         visible_items = sorted(
             (
@@ -1132,7 +1165,14 @@ class DocxRenderer:
         for _, item in visible_items:
             if isinstance(item, ImageBox):
                 paragraph = self._add_paragraph(cell)
-                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                paragraph.paragraph_format.left_indent = Inches(
+                    length_to_inches(item.x, sheet.unit or unit)
+                )
+                paragraph.paragraph_format.space_before = Pt(
+                    length_to_inches(item.y, sheet.unit or unit) * 72
+                )
+                paragraph.paragraph_format.space_after = Pt(0)
                 run = paragraph.add_run()
                 run.add_picture(
                     self._image_box_picture_source(item),
@@ -1142,6 +1182,15 @@ class DocxRenderer:
             else:
                 paragraph = self._add_paragraph(cell)
                 paragraph.alignment = ALIGNMENTS[item.align]
+                paragraph.paragraph_format.left_indent = Inches(
+                    length_to_inches(item.x, sheet.unit or unit)
+                )
+                paragraph.paragraph_format.right_indent = Inches(
+                    max(width - length_to_inches(item.x + item.width, sheet.unit or unit), 0)
+                )
+                paragraph.paragraph_format.space_before = Pt(
+                    length_to_inches(item.y, sheet.unit or unit) * 72
+                )
                 paragraph.paragraph_format.space_after = Pt(2)
                 self._append_runs(
                     paragraph,
@@ -1154,6 +1203,21 @@ class DocxRenderer:
 
         if not visible_items:
             cell.add_paragraph()
+
+    def _sheet_width(self, sheet: Sheet, settings: object, unit: str) -> float:
+        if sheet.width is None:
+            return settings.page_width_in_inches()
+        return length_to_inches(sheet.width, sheet.unit or unit)
+
+    def _sheet_height(self, sheet: Sheet, settings: object, unit: str) -> float:
+        if sheet.height is None:
+            return settings.page_height_in_inches()
+        return length_to_inches(sheet.height, sheet.unit or unit)
+
+    def _sheet_docx_background(self, sheet: Sheet) -> str:
+        if sheet.background_gradient is None:
+            return sheet.background_color
+        return sheet.background_gradient[0]
 
     def _render_table(
         self,
@@ -1314,6 +1378,13 @@ class DocxRenderer:
         shading.set(qn("w:color"), "auto")
         shading.set(qn("w:fill"), fill)
         properties.append(shading)
+
+    def _set_cell_width(self, cell: object, width: float) -> None:
+        properties = cell._tc.get_or_add_tcPr()
+        width_element = OxmlElement("w:tcW")
+        width_element.set(qn("w:w"), str(max(int(round(width * 1440)), 0)))
+        width_element.set(qn("w:type"), "dxa")
+        properties.append(width_element)
 
     def _set_cell_borders(self, cell: object, color: str, width: float) -> None:
         properties = cell._tc.get_or_add_tcPr()

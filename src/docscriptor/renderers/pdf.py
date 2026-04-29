@@ -186,8 +186,7 @@ class SheetFlowable(Flowable):
         canvas = self.canv
         sheet = self.sheet
         canvas.saveState()
-        canvas.setFillColor(colors.HexColor(f"#{sheet.background_color}"))
-        canvas.rect(0, 0, self.width, self.height, fill=1, stroke=0)
+        self._draw_background()
         if sheet.border_color is not None and sheet.border_width > 0:
             canvas.setStrokeColor(colors.HexColor(f"#{sheet.border_color}"))
             canvas.setLineWidth(sheet.border_width)
@@ -200,6 +199,32 @@ class SheetFlowable(Flowable):
             else:
                 self._draw_shape(item)
         canvas.restoreState()
+
+    def _draw_background(self) -> None:
+        canvas = self.canv
+        sheet = self.sheet
+        if sheet.background_gradient is not None and hasattr(canvas, "linearGradient"):
+            start, end = sheet.background_gradient
+            if sheet.gradient_direction == "horizontal":
+                canvas.linearGradient(
+                    0,
+                    0,
+                    self.width,
+                    0,
+                    (colors.HexColor(f"#{start}"), colors.HexColor(f"#{end}")),
+                )
+            else:
+                canvas.linearGradient(
+                    0,
+                    self.height,
+                    0,
+                    0,
+                    (colors.HexColor(f"#{start}"), colors.HexColor(f"#{end}")),
+                )
+            canvas.rect(0, 0, self.width, self.height, fill=1, stroke=0)
+            return
+        canvas.setFillColor(colors.HexColor(f"#{sheet.background_color}"))
+        canvas.rect(0, 0, self.width, self.height, fill=1, stroke=0)
 
     def _items(self) -> list[TextBox | Shape | ImageBox]:
         return [
@@ -508,7 +533,10 @@ class PdfRenderer:
     ) -> list[object]:
         """Render a fixed-layout sheet into PDF flowables."""
 
-        story: list[object] = [SheetFlowable(block, self, context)]
+        story: list[object] = []
+        if block.page_break_before:
+            story.append(RLPageBreak())
+        story.append(SheetFlowable(block, self, context))
         if block.page_break_after:
             story.append(RLPageBreak())
         return story

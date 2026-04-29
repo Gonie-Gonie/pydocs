@@ -560,6 +560,7 @@ def test_sheet_renders_fixed_layout_text_and_shapes(tmp_path: Path) -> None:
         height=5.0,
         unit="in",
         background_color="#FDFBF6",
+        background_gradient=("#FDFBF6", "#EEF6FF"),
         border_color="#D4B56A",
         border_width=1.0,
     )
@@ -592,15 +593,17 @@ def test_sheet_renders_fixed_layout_text_and_shapes(tmp_path: Path) -> None:
     assert "Docscriptor Contributor Certificate" in table_text
     assert "Awarded for keeping document structure readable" in table_text
     assert "After sheet." in word_text
+    assert len(word_document.sections) >= 3
     assert "Docscriptor Contributor Certificate" in pdf_text
     assert "Awarded for keeping document structure readable" in pdf_text
+    assert len(PdfReader(BytesIO(pdf_path.read_bytes())).pages) >= 3
     assert len(word_document.inline_shapes) == 1
     assert _pdf_image_draw_count(pdf_path) == 1
     assert 'class="docscriptor-sheet"' in html_text
     assert 'class="docscriptor-sheet-image"' in html_text
     assert "Docscriptor Contributor Certificate" in html_text
     assert html_text.count("data:image/png;base64,") == 1
-    assert "background: #FDFBF6" in html_text
+    assert "linear-gradient(to bottom, #FDFBF6, #EEF6FF)" in html_text
 
 
 def test_explicit_page_break_renders_to_all_outputs(tmp_path: Path) -> None:

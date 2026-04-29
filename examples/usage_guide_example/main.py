@@ -162,6 +162,7 @@ certificate = Sheet(
     height=14.0,
     unit="cm",
     background_color="#FDFBF6",
+    background_gradient=("#FDFBF6", "#EEF6FF"),
 )
 """
 
@@ -638,6 +639,7 @@ def build_usage_guide_document() -> Document:
         height=14.0,
         unit="cm",
         background_color="#FDFBF6",
+        background_gradient=("#FDFBF6", "#EEF6FF"),
         border_color="#D4B56A",
         border_width=0.8,
     )

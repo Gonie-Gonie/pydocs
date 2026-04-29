@@ -251,6 +251,7 @@ class HtmlRenderer:
 
         width = self._sheet_width(block, context)
         height = self._sheet_height(block, context)
+        background = self._sheet_background_css(block)
         border = (
             f"border: {block.border_width:.2f}pt solid #{block.border_color};"
             if block.border_color is not None and block.border_width > 0
@@ -260,11 +261,16 @@ class HtmlRenderer:
             self._sheet_item_html(item, block, context)
             for item in self._sheet_items(block)
         )
-        page_break = " break-after: page; page-break-after: always;" if block.page_break_after else ""
+        page_break_parts = []
+        if block.page_break_before:
+            page_break_parts.append("break-before: page; page-break-before: always;")
+        if block.page_break_after:
+            page_break_parts.append("break-after: page; page-break-after: always;")
+        page_break = " " + " ".join(page_break_parts) if page_break_parts else ""
         return (
             '<section class="docscriptor-sheet" '
             f'style="position: relative; width: {width:.4f}in; height: {height:.4f}in; '
-            f'background: #{block.background_color}; {border} overflow: hidden; box-sizing: border-box;{page_break}">'
+            f'{background} {border} overflow: hidden; box-sizing: border-box;{page_break}">'
             + items
             + "</section>"
         )
@@ -887,6 +893,13 @@ class HtmlRenderer:
         if sheet.height is None:
             return context.settings.page_height_in_inches()
         return length_to_inches(sheet.height, sheet.unit or context.unit)
+
+    def _sheet_background_css(self, sheet: Sheet) -> str:
+        if sheet.background_gradient is None:
+            return f"background: #{sheet.background_color};"
+        direction = "to bottom" if sheet.gradient_direction == "vertical" else "to right"
+        start, end = sheet.background_gradient
+        return f"background: linear-gradient({direction}, #{start}, #{end});"
 
     def _sheet_length(self, value: float, sheet: Sheet, context: HtmlRenderContext) -> float:
         return length_to_inches(value, sheet.unit or context.unit)
